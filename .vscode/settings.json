@@ -1,0 +1,10 @@
+{
+  "C_Cpp.default.configurationProvider": "ms-vscode.makefile-tools",
+  "makefile.makePath": "make",
+  "makefile.buildDirectory": "${workspaceFolder}/build",
+  "makefile.compileCommandsPath": "${workspaceFolder}/build/compile_commands.json",
+  "files.associations": {
+    "stm32f1xx.h": "c",
+    "stm32f103xb.h": "c"
+  }
+}

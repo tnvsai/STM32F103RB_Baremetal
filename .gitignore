@@ -1,0 +1,17 @@
+# Ignore build outputs
+/build/
+*.o
+*.elf
+*.bin
+*.map
+*.lst
+
+# Ignore temporary files
+*.swp
+*.swo
+*.tmp
+*.log
+
+# Ignore OS-specific junk
+.DS_Store
+Thumbs.db
