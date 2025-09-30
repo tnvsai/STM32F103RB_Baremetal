@@ -1,11 +1,3 @@
-#include "stm32f103xb.h"
-#include "uart.h"
-
-// Crude delay (~1 second at 8 MHz)
-static void delay(volatile uint32_t count) {
-    while (count--) __asm__("nop");
-}
-
 int main(void) {
     // UART2 configuration
     UART_Config_t uart2_cfg = {
