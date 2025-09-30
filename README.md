@@ -1,11 +1,11 @@
-# STM32F103RB Bare-Metal LED Blink
+# STM32F103RB Bare-Metal
 
 This project demonstrates a **bare-metal firmware** for the STM32F103RB (Cortex-M3) MCU using:
 - Startup assembly (`startup_stm32f103rbtx.s`)
 - Linker script (`STM32F103RBTX_FLASH.ld`)
 - CMSIS system initialization (`system_stm32f1xx.c`)
 - Minimal `syscalls.c` (newlib stubs)
-- A simple LED blink on PC13
+- 
 
 No HAL/LL libraries are used — only CMSIS and direct register access.
 
