@@ -2,16 +2,17 @@
 PROJECT = main
 
 # Directories
-BUILD_DIR = build
-SRC_DIR = src
-INC_DIR = include
-LINKER_DIR = linker
+BUILD_DIR   = build
+SRC_DIR     = src
+DRIVERS_DIR = $(SRC_DIR)/drivers
+INC_DIR     = include
+LINKER_DIR  = linker
 
 # Toolchain
-CC = arm-none-eabi-gcc
+CC      = arm-none-eabi-gcc
 OBJCOPY = arm-none-eabi-objcopy
-SIZE = arm-none-eabi-size
-GDB = arm-none-eabi-gdb
+SIZE    = arm-none-eabi-size
+GDB     = arm-none-eabi-gdb
 OPENOCD = "C:/Program Files/xpack-openocd-0.12.0-6/bin/openocd.exe"
 
 # Flags
@@ -20,11 +21,8 @@ CFLAGS = -mcpu=cortex-m3 -mthumb -O0 -g3 -Wall -ffreestanding -fno-builtin \
 LDFLAGS = -T$(LINKER_DIR)/STM32F103RBTX_FLASH.ld -lc -lgcc -lnosys -Wl,--gc-sections
 
 # Sources
-C_SOURCES = $(SRC_DIR)/main.c \
-            $(SRC_DIR)/system_stm32f1xx.c \
-            $(SRC_DIR)/syscalls.c
-
-ASM_SOURCES = $(SRC_DIR)/startup_stm32f103rbtx.s
+C_SOURCES   = $(wildcard $(SRC_DIR)/*.c) $(wildcard $(DRIVERS_DIR)/*.c)
+ASM_SOURCES = $(wildcard $(SRC_DIR)/*.s)
 
 # Objects
 OBJECTS = $(C_SOURCES:$(SRC_DIR)/%.c=$(BUILD_DIR)/%.o) \
@@ -36,9 +34,13 @@ all: $(BUILD_DIR)/$(PROJECT).elf $(BUILD_DIR)/$(PROJECT).bin
 # Create build dir if not exists
 $(BUILD_DIR):
 	mkdir -p $(BUILD_DIR)
+	mkdir -p $(BUILD_DIR)/drivers
 
 # Compile C files
 $(BUILD_DIR)/%.o: $(SRC_DIR)/%.c | $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/drivers/%.o: $(DRIVERS_DIR)/%.c | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 # Assemble startup
@@ -47,8 +49,9 @@ $(BUILD_DIR)/%.o: $(SRC_DIR)/%.s | $(BUILD_DIR)
 
 # Link
 $(BUILD_DIR)/$(PROJECT).elf: $(OBJECTS)
-	$(CC) $(CFLAGS) $^ -o $@ $(LDFLAGS)
+	$(CC) $(CFLAGS) $(OBJECTS) -o $@ $(LDFLAGS)
 	$(SIZE) $@
+
 
 # Binary
 $(BUILD_DIR)/$(PROJECT).bin: $(BUILD_DIR)/$(PROJECT).elf

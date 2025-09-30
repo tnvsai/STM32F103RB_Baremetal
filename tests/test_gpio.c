@@ -1,14 +1,3 @@
-
-#include "stm32f103xb.h"
-#include "rcc.h"
-#include "gpio.h"
-
-void delay(volatile uint32_t count) {
-    while(count--) {
-        __asm("nop");
-    }
-}
-
 int main(void) {
     // Enable GPIOC + GPIOA clocks
     RCC_EnableClock(RCC_APB2, RCC_IOPCEN | RCC_IOPAEN | RCC_AFIOEN);
