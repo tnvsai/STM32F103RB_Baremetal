@@ -1,5 +1,24 @@
 #include "eeprom.h"
-// ATMTC730 24C256N EEPROM
+
+// EEPROM constants
+#define EEPROM_ADDR       0x50        // 7-bit I2C address
+#define EEPROM_PAGE_SIZE  64          // EEPROM page size in bytes
+#define EEPROM_WRITE_DELAY 5000       // Minimal software delay if needed (us)
+
+// -----------------------------
+// Wait until EEPROM is ready (ACK polling)
+// -----------------------------
+static int EEPROM_WaitReady(I2C_TypeDef *I2Cx) {
+    int timeout = 10000;
+    while(timeout--) {
+        if(I2C_Start(I2Cx, EEPROM_ADDR, I2C_WRITE) == I2C_OK) {
+            I2C_Stop(I2Cx);
+            return I2C_OK; // EEPROM ready
+        }
+    }
+    return I2C_TIMEOUT; // Timeout waiting for ACK
+}
+
 // -----------------------------
 // Write single byte
 // -----------------------------
@@ -10,18 +29,16 @@ int EEPROM_WriteByte(I2C_TypeDef *I2Cx, uint16_t mem_addr, uint8_t data) {
     if(ret != I2C_OK) return ret;
 
     // Send 16-bit memory address
-    I2C_Write(I2Cx, (mem_addr >> 8) & 0xFF); // High byte
-    I2C_Write(I2Cx, mem_addr & 0xFF);        // Low byte
+    if(I2C_Write(I2Cx, (mem_addr >> 8) & 0xFF) != I2C_OK) { I2C_Stop(I2Cx); return I2C_ERR; }
+    if(I2C_Write(I2Cx, mem_addr & 0xFF) != I2C_OK) { I2C_Stop(I2Cx); return I2C_ERR; }
 
-    // Send data
-    I2C_Write(I2Cx, data);
+    // Send data byte
+    if(I2C_Write(I2Cx, data) != I2C_OK) { I2C_Stop(I2Cx); return I2C_ERR; }
 
     I2C_Stop(I2Cx);
 
-    // EEPROM internal write delay (~5ms)
-    for(volatile int d=0; d<50000; d++);
-
-    return I2C_OK;
+    // Wait for write completion using ACK polling
+    return EEPROM_WaitReady(I2Cx);
 }
 
 // -----------------------------
@@ -30,15 +47,14 @@ int EEPROM_WriteByte(I2C_TypeDef *I2Cx, uint16_t mem_addr, uint8_t data) {
 int EEPROM_ReadByte(I2C_TypeDef *I2Cx, uint16_t mem_addr, uint8_t *data) {
     int ret;
 
-    // Send memory address first
+    // Set memory address (write)
     ret = I2C_Start(I2Cx, EEPROM_ADDR, I2C_WRITE);
     if(ret != I2C_OK) return ret;
 
-    I2C_Write(I2Cx, (mem_addr >> 8) & 0xFF);
-    I2C_Write(I2Cx, mem_addr & 0xFF);
-    I2C_Stop(I2Cx);
+    if(I2C_Write(I2Cx, (mem_addr >> 8) & 0xFF) != I2C_OK) { I2C_Stop(I2Cx); return I2C_ERR; }
+    if(I2C_Write(I2Cx, mem_addr & 0xFF) != I2C_OK) { I2C_Stop(I2Cx); return I2C_ERR; }
 
-    // Read byte
+    // Repeated START for read
     ret = I2C_Start(I2Cx, EEPROM_ADDR, I2C_READ);
     if(ret != I2C_OK) return ret;
 
@@ -49,24 +65,43 @@ int EEPROM_ReadByte(I2C_TypeDef *I2Cx, uint16_t mem_addr, uint8_t *data) {
 }
 
 // -----------------------------
-// Write multiple bytes
+// Write multiple bytes (page-aware)
 // -----------------------------
 int EEPROM_WriteBytes(I2C_TypeDef *I2Cx, uint16_t mem_addr, uint8_t *data, uint16_t length) {
-    int ret;
+    int ret = I2C_OK;
+    uint16_t remaining = length;
+    uint16_t offset = 0;
 
-    ret = I2C_Start(I2Cx, EEPROM_ADDR, I2C_WRITE);
-    if(ret != I2C_OK) return ret;
+    while(remaining > 0) {
+        uint16_t page_start = mem_addr % EEPROM_PAGE_SIZE;
+        uint16_t space_in_page = EEPROM_PAGE_SIZE - page_start;
+        uint16_t to_write = (remaining < space_in_page) ? remaining : space_in_page;
 
-    I2C_Write(I2Cx, (mem_addr >> 8) & 0xFF);
-    I2C_Write(I2Cx, mem_addr & 0xFF);
+        // Start write sequence
+        ret = I2C_Start(I2Cx, EEPROM_ADDR, I2C_WRITE);
+        if(ret != I2C_OK) return ret;
 
-    for(int i=0;i<length;i++) {
-        I2C_Write(I2Cx, data[i]);
+        // Send memory address
+        if(I2C_Write(I2Cx, (mem_addr >> 8) & 0xFF) != I2C_OK) { I2C_Stop(I2Cx); return I2C_ERR; }
+        if(I2C_Write(I2Cx, mem_addr & 0xFF) != I2C_OK) { I2C_Stop(I2Cx); return I2C_ERR; }
+
+        // Send bytes for this page
+        for(uint16_t i=0; i<to_write; i++) {
+            if(I2C_Write(I2Cx, data[offset + i]) != I2C_OK) {
+                I2C_Stop(I2Cx);
+                return I2C_ERR;
+            }
+        }
+        I2C_Stop(I2Cx);
+
+        // Wait until EEPROM write completes
+        if((ret = EEPROM_WaitReady(I2Cx)) != I2C_OK) return ret;
+
+        // Advance pointers
+        mem_addr += to_write;
+        offset += to_write;
+        remaining -= to_write;
     }
-    I2C_Stop(I2Cx);
-
-    // EEPROM write cycle delay
-    for(volatile int d=0; d<50000; d++);
 
     return I2C_OK;
 }
@@ -77,20 +112,19 @@ int EEPROM_WriteBytes(I2C_TypeDef *I2Cx, uint16_t mem_addr, uint8_t *data, uint1
 int EEPROM_ReadBytes(I2C_TypeDef *I2Cx, uint16_t mem_addr, uint8_t *data, uint16_t length) {
     int ret;
 
-    // Send memory address first
+    // Set memory address (write)
     ret = I2C_Start(I2Cx, EEPROM_ADDR, I2C_WRITE);
     if(ret != I2C_OK) return ret;
 
-    I2C_Write(I2Cx, (mem_addr >> 8) & 0xFF);
-    I2C_Write(I2Cx, mem_addr & 0xFF);
-    I2C_Stop(I2Cx);
+    if(I2C_Write(I2Cx, (mem_addr >> 8) & 0xFF) != I2C_OK) { I2C_Stop(I2Cx); return I2C_ERR; }
+    if(I2C_Write(I2Cx, mem_addr & 0xFF) != I2C_OK) { I2C_Stop(I2Cx); return I2C_ERR; }
 
-    // Read bytes
+    // Repeated START for read
     ret = I2C_Start(I2Cx, EEPROM_ADDR, I2C_READ);
     if(ret != I2C_OK) return ret;
 
-    for(int i=0;i<length;i++) {
-        data[i] = I2C_Read(I2Cx, (i < length-1) ? 1 : 0); // ACK for all but last
+    for(uint16_t i=0; i<length; i++) {
+        data[i] = I2C_Read(I2Cx, (i < length-1) ? 1 : 0); // ACK all but last byte
     }
     I2C_Stop(I2Cx);
 
