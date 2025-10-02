@@ -1,4 +1,5 @@
 #include "timer.h"
+#include "stm32f103xb.h"
 
 #define MCU_CLOCK 8000000UL // 8 MHz
 
@@ -25,6 +26,7 @@ static void TIMER_EnableClock(Timer_Id_t timer) {
 
 // ---------------- Callback storage ----------------
 static Timer_Callback_t timer_callbacks[4] = {0};
+static Timer_Callback_t ic_callbacks[4]    = {0};
 
 // ---------------- Initialize timer in milliseconds ----------------
 void TIMER_InitMs(Timer_Id_t timer, uint32_t ms, Timer_Callback_t callback) {
@@ -111,13 +113,12 @@ void IRQ(void) { \
     } \
 }
 
-TIMER_IRQ_HANDLER(TIM1_UP_IRQHandler, TIMER1)
-TIMER_IRQ_HANDLER(TIM2_IRQHandler,   TIMER2)
-TIMER_IRQ_HANDLER(TIM3_IRQHandler,   TIMER3)
-TIMER_IRQ_HANDLER(TIM4_IRQHandler,   TIMER4)
+// TIMER_IRQ_HANDLER(TIM1_UP_IRQHandler, TIMER1)
+// TIMER_IRQ_HANDLER(TIM2_IRQHandler,   TIMER2)
+// TIMER_IRQ_HANDLER(TIM3_IRQHandler,   TIMER3)
+// TIMER_IRQ_HANDLER(TIM4_IRQHandler,   TIMER4)
 
 // ---------------- PWM Init ----------------
-// channel = 1..4, auto-configures GPIO
 void TIMER_InitPWM(Timer_Id_t timer, uint8_t channel, uint16_t prescaler, uint16_t arr) {
     TIM_TypeDef *TIMx = TIMER_GetBase(timer);
     if (!TIMx) return;
@@ -183,7 +184,6 @@ void TIMER_InitPWM(Timer_Id_t timer, uint8_t channel, uint16_t prescaler, uint16
     if (timer == TIMER1) TIM1->BDTR |= TIM_BDTR_MOE; // TIM1 main output enable
 }
 
-// ---------------- Set PWM Duty ----------------
 void TIMER_SetPWMDuty(Timer_Id_t timer, uint8_t channel, uint16_t duty) {
     TIM_TypeDef *TIMx = TIMER_GetBase(timer);
     if (!TIMx) return;
@@ -195,3 +195,69 @@ void TIMER_SetPWMDuty(Timer_Id_t timer, uint8_t channel, uint16_t duty) {
         case 4: TIMx->CCR4 = duty; break;
     }
 }
+
+// ---------------- Input Capture ----------------
+void TIMER_InitInputCapture(Timer_Id_t timer, uint8_t channel, uint16_t prescaler, uint16_t arr, Timer_Callback_t callback) {
+    TIM_TypeDef *TIMx = TIMER_GetBase(timer);
+    if (!TIMx) return;
+
+    TIMER_EnableClock(timer);
+
+    TIMx->PSC = prescaler;
+    TIMx->ARR = arr;
+    TIMx->CNT = 0;
+
+    ic_callbacks[timer] = callback;
+
+    switch(channel) {
+        case 1:
+            TIMx->CCMR1 &= ~TIM_CCMR1_CC1S;
+            TIMx->CCMR1 |= 1 << 0; // CC1S = 01 → map to TI1
+            TIMx->CCER |= TIM_CCER_CC1E; 
+            TIMx->DIER |= TIM_DIER_CC1IE;
+            break;
+        case 2:
+            TIMx->CCMR1 &= ~TIM_CCMR1_CC2S;
+            TIMx->CCMR1 |= 1 << 8; // CC2S = 01 → map to TI2
+            TIMx->CCER |= TIM_CCER_CC2E; 
+            TIMx->DIER |= TIM_DIER_CC2IE;
+            break;
+        case 3:
+            TIMx->CCMR2 &= ~TIM_CCMR2_CC3S;
+            TIMx->CCMR2 |= 1 << 0; // CC3S = 01 → map to TI3
+            TIMx->CCER |= TIM_CCER_CC3E; 
+            TIMx->DIER |= TIM_DIER_CC3IE;
+            break;
+        case 4:
+            TIMx->CCMR2 &= ~TIM_CCMR2_CC4S;
+            TIMx->CCMR2 |= 1 << 8; // CC4S = 01 → map to TI4
+            TIMx->CCER |= TIM_CCER_CC4E; 
+            TIMx->DIER |= TIM_DIER_CC4IE;
+            break;
+    }
+
+    TIMx->CR1 |= TIM_CR1_CEN;
+
+    // Enable NVIC
+    switch(timer) {
+        case TIMER1: NVIC_EnableIRQ(TIM1_UP_IRQn); break;
+        case TIMER2: NVIC_EnableIRQ(TIM2_IRQn); break;
+        case TIMER3: NVIC_EnableIRQ(TIM3_IRQn); break;
+        case TIMER4: NVIC_EnableIRQ(TIM4_IRQn); break;
+    }
+}
+
+// Extend existing IRQ handlers for input capture
+#define TIMER_IC_IRQ_HANDLER(IRQ, ID) \
+void IRQ(void) { \
+    TIM_TypeDef *TIMx = TIMER_GetBase(ID); \
+    if ((TIMx->SR & TIM_SR_CC1IF) && ic_callbacks[ID]) { \
+        TIMx->SR &= ~TIM_SR_CC1IF; \
+        ic_callbacks[ID](); \
+    } \
+}
+
+TIMER_IC_IRQ_HANDLER(TIM1_UP_IRQHandler, TIMER1)
+TIMER_IC_IRQ_HANDLER(TIM2_IRQHandler,   TIMER2)
+TIMER_IC_IRQ_HANDLER(TIM3_IRQHandler,   TIMER3)
+TIMER_IC_IRQ_HANDLER(TIM4_IRQHandler,   TIMER4)
