@@ -115,3 +115,83 @@ TIMER_IRQ_HANDLER(TIM1_UP_IRQHandler, TIMER1)
 TIMER_IRQ_HANDLER(TIM2_IRQHandler,   TIMER2)
 TIMER_IRQ_HANDLER(TIM3_IRQHandler,   TIMER3)
 TIMER_IRQ_HANDLER(TIM4_IRQHandler,   TIMER4)
+
+// ---------------- PWM Init ----------------
+// channel = 1..4, auto-configures GPIO
+void TIMER_InitPWM(Timer_Id_t timer, uint8_t channel, uint16_t prescaler, uint16_t arr) {
+    TIM_TypeDef *TIMx = TIMER_GetBase(timer);
+    if (!TIMx) return;
+
+    TIMER_EnableClock(timer);
+
+    // -------- GPIO Configuration --------
+    switch(timer) {
+        case TIMER1:
+            RCC->APB2ENR |= RCC_APB2ENR_IOPAEN;
+            switch(channel) {
+                case 1: GPIOA->CRH = (GPIOA->CRH & ~(0xF << 0)) | (0xB << 0); break; // PA8
+                case 2: GPIOA->CRH = (GPIOA->CRH & ~(0xF << 4)) | (0xB << 4); break; // PA9
+                case 3: GPIOA->CRH = (GPIOA->CRH & ~(0xF << 8)) | (0xB << 8); break; // PA10
+                case 4: GPIOA->CRH = (GPIOA->CRH & ~(0xF << 12)) | (0xB << 12); break; // PA11
+            }
+            break;
+        case TIMER2:
+            RCC->APB2ENR |= RCC_APB2ENR_IOPAEN;
+            switch(channel) {
+                case 1: GPIOA->CRL = (GPIOA->CRL & ~(0xF << 0)) | (0xB << 0); break; // PA0
+                case 2: GPIOA->CRL = (GPIOA->CRL & ~(0xF << 4)) | (0xB << 4); break; // PA1
+                case 3: GPIOA->CRL = (GPIOA->CRL & ~(0xF << 8)) | (0xB << 8); break; // PA2
+                case 4: GPIOA->CRL = (GPIOA->CRL & ~(0xF << 12)) | (0xB << 12); break; // PA3
+            }
+            break;
+        case TIMER3:
+            RCC->APB2ENR |= RCC_APB2ENR_IOPAEN | RCC_APB2ENR_IOPBEN;
+            switch(channel) {
+                case 1: GPIOA->CRL = (GPIOA->CRL & ~(0xF << 24)) | (0xB << 24); break; // PA6
+                case 2: GPIOA->CRL = (GPIOA->CRL & ~(0xF << 28)) | (0xB << 28); break; // PA7
+                case 3: GPIOB->CRL = (GPIOB->CRL & ~(0xF << 0))  | (0xB << 0); break;  // PB0
+                case 4: GPIOB->CRL = (GPIOB->CRL & ~(0xF << 4))  | (0xB << 4); break;  // PB1
+            }
+            break;
+        case TIMER4:
+            RCC->APB2ENR |= RCC_APB2ENR_IOPBEN;
+            switch(channel) {
+                case 1: GPIOB->CRL = (GPIOB->CRL & ~(0xF << 24)) | (0xB << 24); break; // PB6
+                case 2: GPIOB->CRL = (GPIOB->CRL & ~(0xF << 28)) | (0xB << 28); break; // PB7
+                case 3: GPIOB->CRH = (GPIOB->CRH & ~(0xF << 0))  | (0xB << 0); break;  // PB8
+                case 4: GPIOB->CRH = (GPIOB->CRH & ~(0xF << 4))  | (0xB << 4); break;  // PB9
+            }
+            break;
+    }
+
+    // -------- Timer Configuration --------
+    TIMx->PSC = prescaler;
+    TIMx->ARR = arr;
+    TIMx->EGR = TIM_EGR_UG;
+
+    // Configure PWM mode
+    switch(channel) {
+        case 1: TIMx->CCMR1 = (TIMx->CCMR1 & ~TIM_CCMR1_OC1M) | (6 << TIM_CCMR1_OC1M_Pos); TIMx->CCMR1 |= TIM_CCMR1_OC1PE; TIMx->CCER |= TIM_CCER_CC1E; break;
+        case 2: TIMx->CCMR1 = (TIMx->CCMR1 & ~TIM_CCMR1_OC2M) | (6 << TIM_CCMR1_OC2M_Pos); TIMx->CCMR1 |= TIM_CCMR1_OC2PE; TIMx->CCER |= TIM_CCER_CC2E; break;
+        case 3: TIMx->CCMR2 = (TIMx->CCMR2 & ~TIM_CCMR2_OC3M) | (6 << TIM_CCMR2_OC3M_Pos); TIMx->CCMR2 |= TIM_CCMR2_OC3PE; TIMx->CCER |= TIM_CCER_CC3E; break;
+        case 4: TIMx->CCMR2 = (TIMx->CCMR2 & ~TIM_CCMR2_OC4M) | (6 << TIM_CCMR2_OC4M_Pos); TIMx->CCMR2 |= TIM_CCMR2_OC4PE; TIMx->CCER |= TIM_CCER_CC4E; break;
+    }
+
+    TIMx->CR1 |= TIM_CR1_ARPE;
+    TIMx->CR1 |= TIM_CR1_CEN;
+
+    if (timer == TIMER1) TIM1->BDTR |= TIM_BDTR_MOE; // TIM1 main output enable
+}
+
+// ---------------- Set PWM Duty ----------------
+void TIMER_SetPWMDuty(Timer_Id_t timer, uint8_t channel, uint16_t duty) {
+    TIM_TypeDef *TIMx = TIMER_GetBase(timer);
+    if (!TIMx) return;
+
+    switch(channel) {
+        case 1: TIMx->CCR1 = duty; break;
+        case 2: TIMx->CCR2 = duty; break;
+        case 3: TIMx->CCR3 = duty; break;
+        case 4: TIMx->CCR4 = duty; break;
+    }
+}
