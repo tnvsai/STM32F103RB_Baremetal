@@ -29,4 +29,8 @@ void TIMER_DisableInterrupt(Timer_Id_t timer);
 uint8_t TIMER_HasElapsed(Timer_Id_t timer);
 void TIMER_ClearFlag(Timer_Id_t timer);
 
+/* PWM api's */
+void TIMER_InitPWM(Timer_Id_t timer, uint8_t channel, uint16_t prescaler, uint16_t arr) ;
+void TIMER_SetPWMDuty(Timer_Id_t timer, uint8_t channel, uint16_t duty);
+
 #endif
