@@ -1,40 +1,48 @@
 #include "stm32f103xb.h"
 #include "uart.h"
 #include "bkp.h"
-#include <stdio.h>  // <-- for sprintf
+#include <stdio.h>
+#include "utility.h"
+#include "rtc.h"
 
-UART_Config_t uart2_cfg = {
-    .baudRate    = 115200,
-    .wordLength  = UART_WORDLENGTH_8B,
-    .stopBits    = UART_STOPBITS_1,
-    .parity      = UART_PARITY_NONE,
-    .enableTx    = 1,
-    .enableRx    = 1
-};
+// Simple blocking delay using RTC
+void DelaySeconds(uint32_t sec)
+{
+    uint32_t start = ((uint32_t)RTC->CNTH << 16) | RTC->CNTL;
+    while ((((uint32_t)RTC->CNTH << 16) | RTC->CNTL) - start < sec);
+}
 
 int main(void)
 {
-    UART_Init(USART2, &uart2_cfg);
-    UART_WriteString(USART2, "\r\nUART ready\r\n");
+    RTC_Init();
 
-    BKP_Init();
-    UART_WriteString(USART2, "BKP initialized\r\n");
+    // Only set counter once if needed
+    // RTC_SetCounter(0); // optional, skip if you want RTC to continue after reset
 
-    uint16_t previousValue = BKP_ReadReg(BKP_DR1);
+    RTC_SetAlarm(10); // Alarm at 10 seconds
 
-    // ✅ Use sprintf for cleaner formatting
-    char msg[64];
-    sprintf(msg, "Previous BKP_DR1 value: 0x%04X\r\n", previousValue);
-    UART_WriteString(USART2, msg);
+    uint32_t h, m, s;
 
-    uint16_t newValue = 0x55AA;
-    BKP_WriteReg(BKP_DR1, newValue);
+    while(1)
+    {
+        // Get current time
+        RTC_GetTime(&h, &m, &s);
 
-    sprintf(msg, "New BKP_DR1 value written: 0x%04X\r\n", newValue);
-    UART_WriteString(USART2, msg);
+        // Print time every 2 seconds with manual zero-padding
+        mini_printf("Time: %c%u:%c%u:%c%u\r\n",
+            (h < 10) ? '0' : '0' + (h / 10), h % 10,
+            (m < 10) ? '0' : '0' + (m / 10), m % 10,
+            (s < 10) ? '0' : '0' + (s / 10), s % 10);
 
-    UART_WriteString(USART2, "Reset the MCU to test persistence\r\n");
-    BKP_ResetDomain();
+        DelaySeconds(2);
 
-    while (1);
+        // Check if alarm triggered
+        if(RTC_AlarmTriggered())
+        {
+            mini_printf(">>> RTC Alarm Triggered at %c%u:%c%u:%c%u <<<\r\n",
+                (h < 10) ? '0' : '0' + (h / 10), h % 10,
+                (m < 10) ? '0' : '0' + (m / 10), m % 10,
+                (s < 10) ? '0' : '0' + (s / 10), s % 10);
+        }
+    }
 }
