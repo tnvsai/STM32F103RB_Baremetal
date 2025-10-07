@@ -39,3 +39,8 @@ void LED_Off(void)
     GPIOA->ODR &= ~(1 << LED_PIN);
 }
 
+// void uart_print(const char *msg) {
+//     UART_WriteString(USART2, msg);
+//     UART_WriteString(USART2, "\r\n");
+//     delay_ms(2); // allow UART flush
+// }
