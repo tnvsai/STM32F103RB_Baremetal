@@ -1,5 +1,8 @@
 #include "stm32f103xb.h"
 #include "utility.h"
+#include "uart.h"
+#include <stdarg.h>
+#include <stdint.h>
 
 #define LED_PIN 5
 
@@ -44,3 +47,108 @@ void LED_Off(void)
 //     UART_WriteString(USART2, "\r\n");
 //     delay_ms(2); // allow UART flush
 // }
+
+#include "uart.h"
+#include <stdarg.h>
+#include <stdint.h>
+
+static void u32_to_str(uint32_t value, char *buf) {
+    char temp[11];
+    int i = 0;
+
+    if (value == 0) {
+        buf[0] = '0';
+        buf[1] = '\0';
+        return;
+    }
+
+    while (value > 0) {
+        temp[i++] = (value % 10) + '0';
+        value /= 10;
+    }
+
+    for (int j = 0; j < i; j++) {
+        buf[j] = temp[i - j - 1];
+    }
+    buf[i] = '\0';
+}
+
+static void u32_to_hex(uint32_t value, char *buf) {
+    for (int i = 0; i < 8; i++) {
+        uint8_t nibble = (value >> (28 - i * 4)) & 0xF;
+        buf[i] = (nibble < 10) ? ('0' + nibble) : ('A' + nibble - 10);
+    }
+    buf[8] = '\0';
+}
+
+void mini_printf(const char *fmt, ...) {
+    static uint8_t uart_initialized = 0;
+    if (!uart_initialized) {
+        UART_Config_t uart2_cfg = {
+            .baudRate   = 115200,
+            .wordLength = UART_WORDLENGTH_8B,
+            .stopBits   = UART_STOPBITS_1,
+            .parity     = UART_PARITY_NONE,
+            .enableTx   = 1,
+            .enableRx   = 1
+        };
+        UART_Init(USART2, &uart2_cfg);
+        uart_initialized = 1;
+    }
+
+    va_list args;
+    va_start(args, fmt);
+    char buf[16];
+
+    while (*fmt) {
+        if (*fmt == '%') {
+            fmt++;
+            switch (*fmt) {
+                case 'd': {
+                    int val = va_arg(args, int);
+                    if (val < 0) {
+                        UART_WriteChar(USART2, '-');
+                        val = -val;
+                    }
+                    u32_to_str((uint32_t)val, buf);
+                    UART_WriteString(USART2, buf);
+                    break;
+                }
+                case 'u': {
+                    uint32_t val = va_arg(args, uint32_t);
+                    u32_to_str(val, buf);
+                    UART_WriteString(USART2, buf);
+                    break;
+                }
+                case 'x':
+                case 'X': {
+                    uint32_t val = va_arg(args, uint32_t);
+                    u32_to_hex(val, buf);
+                    UART_WriteString(USART2, buf);
+                    break;
+                }
+                case 's': {
+                    char *str = va_arg(args, char *);
+                    UART_WriteString(USART2, str);
+                    break;
+                }
+                case 'c': {
+                    char c = (char)va_arg(args, int);
+                    UART_WriteChar(USART2, c);
+                    break;
+                }
+                case '%':
+                    UART_WriteChar(USART2, '%');
+                    break;
+                default:
+                    UART_WriteChar(USART2, '?');
+                    break;
+            }
+        } else {
+            UART_WriteChar(USART2, *fmt);
+        }
+        fmt++;
+    }
+
+    va_end(args);
+}
