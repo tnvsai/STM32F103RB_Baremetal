@@ -1,83 +1,143 @@
+################################################################################
+# 🧩 Project Configuration
+################################################################################
+
 # Project name
 PROJECT = main
 
-# Directories
+# Directory structure
 BUILD_DIR   = build
 SRC_DIR     = src
 DRIVERS_DIR = $(SRC_DIR)/drivers
 INC_DIR     = include
 LINKER_DIR  = linker
 
-# Toolchain
+################################################################################
+# 🧠 Toolchain and Utilities
+################################################################################
+
 CC      = arm-none-eabi-gcc
 OBJCOPY = arm-none-eabi-objcopy
 SIZE    = arm-none-eabi-size
 GDB     = arm-none-eabi-gdb
 OPENOCD = "C:/Program Files/xpack-openocd-0.12.0-6/bin/openocd.exe"
 
-# Flags
+################################################################################
+# ⚙️ Compiler and Linker Flags
+################################################################################
+
+# Compiler options
 CFLAGS = -mcpu=cortex-m3 -mthumb -O0 -g3 -Wall -ffreestanding -fno-builtin \
          -DSTM32F103xB -I$(INC_DIR)
-LDFLAGS = -T$(LINKER_DIR)/STM32F103RBTX_FLASH.ld -lc -lgcc -lnosys -Wl,--gc-sections
 
-# Sources
-C_SOURCES   = $(wildcard $(SRC_DIR)/*.c) $(wildcard $(DRIVERS_DIR)/*.c)
+# Linker options
+LDFLAGS = -T$(LINKER_DIR)/STM32F103RBTX_FLASH.ld \
+           -lc -lgcc -lnosys -Wl,--gc-sections
+
+################################################################################
+# 📂 Source and Object Management
+################################################################################
+
+# Find all C and Assembly source files
+C_SOURCES   = $(wildcard $(SRC_DIR)/*.c) \
+              $(wildcard $(DRIVERS_DIR)/*.c)
+
 ASM_SOURCES = $(wildcard $(SRC_DIR)/*.s)
 
-# Objects
-OBJECTS = $(C_SOURCES:$(SRC_DIR)/%.c=$(BUILD_DIR)/%.o) \
-          $(ASM_SOURCES:$(SRC_DIR)/%.s=$(BUILD_DIR)/%.o)
+# Object file list (mirror directory structure under build/)
+OBJECTS = $(patsubst $(SRC_DIR)/%.c, $(BUILD_DIR)/%.o, $(C_SOURCES)) \
+          $(patsubst $(SRC_DIR)/%.s, $(BUILD_DIR)/%.o, $(ASM_SOURCES))
 
-# Default target
+# Extract unique subdirectories needed in build/
+BUILD_SUBDIRS := $(sort $(dir $(OBJECTS)))
+
+################################################################################
+# 🎯 Default Target
+################################################################################
+
 all: $(BUILD_DIR)/$(PROJECT).elf $(BUILD_DIR)/$(PROJECT).bin
 
-# Create build dir if not exists
-$(BUILD_DIR):
-	mkdir -p $(BUILD_DIR)
-	mkdir -p $(BUILD_DIR)/drivers
+################################################################################
+# 🧱 Directory Creation
+################################################################################
 
-# Compile C files
-$(BUILD_DIR)/%.o: $(SRC_DIR)/%.c | $(BUILD_DIR)
-	$(CC) $(CFLAGS) -c $< -o $@
+# Cross-platform directory creation
+$(BUILD_SUBDIRS):
+ifeq ($(OS),Windows_NT)
+	@if not exist "$(subst /,\,$@)" mkdir "$(subst /,\,$@)"
+else
+	@mkdir -p $@
+endif
 
-$(BUILD_DIR)/drivers/%.o: $(DRIVERS_DIR)/%.c | $(BUILD_DIR)
-	$(CC) $(CFLAGS) -c $< -o $@
+################################################################################
+# 🔧 Compilation Rules
+################################################################################
 
-# Assemble startup
-$(BUILD_DIR)/%.o: $(SRC_DIR)/%.s | $(BUILD_DIR)
-	$(CC) $(CFLAGS) -c $< -o $@
+# Compile C source files
+$(BUILD_DIR)/%.o: $(SRC_DIR)/%.c | $(BUILD_SUBDIRS)
+	@echo [CC] $<
+	@$(CC) $(CFLAGS) -c $< -o $@
 
-# Link
+# Assemble ASM source files
+$(BUILD_DIR)/%.o: $(SRC_DIR)/%.s | $(BUILD_SUBDIRS)
+	@echo [AS] $<
+	@$(CC) $(CFLAGS) -c $< -o $@
+
+################################################################################
+# 🔗 Linking and Binary Generation
+################################################################################
+
+# Link all object files
 $(BUILD_DIR)/$(PROJECT).elf: $(OBJECTS)
-	$(CC) $(CFLAGS) $(OBJECTS) -o $@ $(LDFLAGS)
-	$(SIZE) $@
+	@echo [LD] $@
+	@$(CC) $(CFLAGS) $(OBJECTS) -o $@ $(LDFLAGS)
+	@$(SIZE) $@
 
-
-# Binary
+# Generate binary from ELF
 $(BUILD_DIR)/$(PROJECT).bin: $(BUILD_DIR)/$(PROJECT).elf
-	$(OBJCOPY) -O binary $< $@
+	@echo [BIN] $@
+	@$(OBJCOPY) -O binary $< $@
 
-# Flash (requires STM32CubeProgrammer in PATH)
+################################################################################
+# 🚀 Flashing and Debugging
+################################################################################
+
+# Flash binary using STM32CubeProgrammer
 flash: $(BUILD_DIR)/$(PROJECT).bin
-	STM32_Programmer_CLI -c port=SWD -d $< 0x08000000 -rst
+	@echo [FLASH] Programming MCU...
+	@STM32_Programmer_CLI -c port=SWD -d $< 0x08000000 -rst
 
-# Debug with OpenOCD + GDB
+# Debug session with OpenOCD + GDB
 debug: $(BUILD_DIR)/$(PROJECT).elf
-	$(OPENOCD) -f interface/stlink.cfg -f target/stm32f1x.cfg &
-	sleep 1
-	$(GDB) -ex "target remote localhost:3333" \
-	       -ex "monitor reset halt" \
-	       -ex "load" \
-	       -ex "monitor reset init" \
-	       -ex "continue" \
-	       $(BUILD_DIR)/$(PROJECT).elf
+	@echo [DEBUG] Starting OpenOCD + GDB...
+	@$(OPENOCD) -f interface/stlink.cfg -f target/stm32f1x.cfg &
+	@sleep 1
+	@$(GDB) -ex "target remote localhost:3333" \
+	        -ex "monitor reset halt" \
+	        -ex "load" \
+	        -ex "monitor reset init" \
+	        -ex "continue" \
+	        $(BUILD_DIR)/$(PROJECT).elf
 
-# Chip erase (useful if RDP or corrupted flash)
+# Chip erase (full)
 erase:
-	STM32_Programmer_CLI -c port=SWD -e all
+	@echo [ERASE] Erasing MCU flash...
+	@STM32_Programmer_CLI -c port=SWD -e all
 
-# Clean
+################################################################################
+# 🧹 Cleaning
+################################################################################
+
 clean:
-	rm -rf $(BUILD_DIR)
+ifeq ($(OS),Windows_NT)
+	@if exist "$(BUILD_DIR)" rmdir /S /Q "$(BUILD_DIR)"
+else
+	@rm -rf $(BUILD_DIR)
+endif
+	@echo [CLEAN] Removed build directory.
+
+################################################################################
+# 📘 Phony Targets
+################################################################################
 
 .PHONY: all clean flash debug erase
