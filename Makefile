@@ -5,15 +5,28 @@
 # Project name
 PROJECT = main
 
-# Directory structure
-BUILD_DIR   = build
-SRC_DIR     = src
-DRIVERS_DIR = $(SRC_DIR)/drivers
-INC_DIR     = include
-LINKER_DIR  = linker
+# Target selection: bootloader or application
+TARGET ?= application
+
+# Directories based on target
+ifeq ($(TARGET), bootloader)
+TARGET_SRC_DIR     = bootloader/src
+TARGET_INC_DIR     = bootloader/include
+TARGET_LINKER_FILE = bootloader/linker/STM32F103RBTX_BOOT.ld
+BUILD_DIR          = build/bootloader
+else
+TARGET_SRC_DIR     = application/src
+TARGET_INC_DIR     = application/include
+TARGET_LINKER_FILE = application/linker/STM32F103RBTX_APP.ld
+BUILD_DIR          = build/application
+endif
+
+# Common code
+COMMON_SRC_DIR = common/src
+COMMON_INC_DIR = common/include
 
 ################################################################################
-# 🧠 Toolchain and Utilities
+# 🧠 Toolchain
 ################################################################################
 
 CC      = arm-none-eabi-gcc
@@ -26,29 +39,36 @@ OPENOCD = "C:/Program Files/xpack-openocd-0.12.0-6/bin/openocd.exe"
 # ⚙️ Compiler and Linker Flags
 ################################################################################
 
-# Compiler options
 CFLAGS = -mcpu=cortex-m3 -mthumb -O0 -g3 -Wall -ffreestanding -fno-builtin \
-         -DSTM32F103xB -I$(INC_DIR)
+         -DSTM32F103xB -I$(TARGET_INC_DIR) -I$(COMMON_INC_DIR)
 
-# Linker options
-LDFLAGS = -T$(LINKER_DIR)/STM32F103RBTX_FLASH.ld \
-           -lc -lgcc -lnosys -Wl,--gc-sections
+LDFLAGS = -T$(TARGET_LINKER_FILE) -lc -lgcc -Wl,--gc-sections
 
 ################################################################################
-# 📂 Source and Object Management
+# 📂 Source and Object Files
 ################################################################################
 
-# Find all C and Assembly source files
-C_SOURCES   = $(wildcard $(SRC_DIR)/*.c) \
-              $(wildcard $(DRIVERS_DIR)/*.c)
+# Recursive wildcard function
+rwildcard=$(foreach d,$(wildcard $1*),$(call rwildcard,$d/,$2) $(filter $(subst *,%,$2),$d))
 
-ASM_SOURCES = $(wildcard $(SRC_DIR)/*.s)
+# Collect sources
+C_SOURCES := $(call rwildcard,$(TARGET_SRC_DIR),*.c) \
+             $(call rwildcard,$(COMMON_SRC_DIR),*.c)
 
-# Object file list (mirror directory structure under build/)
-OBJECTS = $(patsubst $(SRC_DIR)/%.c, $(BUILD_DIR)/%.o, $(C_SOURCES)) \
-          $(patsubst $(SRC_DIR)/%.s, $(BUILD_DIR)/%.o, $(ASM_SOURCES))
+# Explicitly include startup file
+STARTUP_FILE := $(TARGET_SRC_DIR)/startup_stm32f103rbtx.s
 
-# Extract unique subdirectories needed in build/
+# Other ASM sources
+ASM_SOURCES := $(call rwildcard,$(TARGET_SRC_DIR),*.s)
+
+# Map source paths to object paths under build/
+OBJECTS := $(patsubst $(TARGET_SRC_DIR)/%.c,$(BUILD_DIR)/%.o,$(C_SOURCES))
+OBJECTS := $(patsubst $(COMMON_SRC_DIR)/%.c,$(BUILD_DIR)/%.o,$(OBJECTS))
+
+# Add startup object explicitly
+OBJECTS += $(BUILD_DIR)/startup_stm32f103xb.o
+
+# Build subdirectories
 BUILD_SUBDIRS := $(sort $(dir $(OBJECTS)))
 
 ################################################################################
@@ -58,10 +78,9 @@ BUILD_SUBDIRS := $(sort $(dir $(OBJECTS)))
 all: $(BUILD_DIR)/$(PROJECT).elf $(BUILD_DIR)/$(PROJECT).bin
 
 ################################################################################
-# 🧱 Directory Creation
+# 🧱 Create Build Directories
 ################################################################################
 
-# Cross-platform directory creation
 $(BUILD_SUBDIRS):
 ifeq ($(OS),Windows_NT)
 	@if not exist "$(subst /,\,$@)" mkdir "$(subst /,\,$@)"
@@ -73,13 +92,23 @@ endif
 # 🔧 Compilation Rules
 ################################################################################
 
-# Compile C source files
-$(BUILD_DIR)/%.o: $(SRC_DIR)/%.c | $(BUILD_SUBDIRS)
+# Compile target C files
+$(BUILD_DIR)/%.o: $(TARGET_SRC_DIR)/%.c | $(BUILD_SUBDIRS)
 	@echo [CC] $<
 	@$(CC) $(CFLAGS) -c $< -o $@
 
-# Assemble ASM source files
-$(BUILD_DIR)/%.o: $(SRC_DIR)/%.s | $(BUILD_SUBDIRS)
+# Compile common C files
+$(BUILD_DIR)/%.o: $(COMMON_SRC_DIR)/%.c | $(BUILD_SUBDIRS)
+	@echo [CC] $<
+	@$(CC) $(CFLAGS) -c $< -o $@
+
+# Assemble startup ASM file explicitly
+$(BUILD_DIR)/startup_stm32f103xb.o: $(STARTUP_FILE) | $(BUILD_SUBDIRS)
+	@echo [AS] $<
+	@$(CC) $(CFLAGS) -c $< -o $@
+
+# Assemble other ASM files
+$(BUILD_DIR)/%.o: $(TARGET_SRC_DIR)/%.s | $(BUILD_SUBDIRS)
 	@echo [AS] $<
 	@$(CC) $(CFLAGS) -c $< -o $@
 
@@ -87,13 +116,11 @@ $(BUILD_DIR)/%.o: $(SRC_DIR)/%.s | $(BUILD_SUBDIRS)
 # 🔗 Linking and Binary Generation
 ################################################################################
 
-# Link all object files
 $(BUILD_DIR)/$(PROJECT).elf: $(OBJECTS)
 	@echo [LD] $@
 	@$(CC) $(CFLAGS) $(OBJECTS) -o $@ $(LDFLAGS)
 	@$(SIZE) $@
 
-# Generate binary from ELF
 $(BUILD_DIR)/$(PROJECT).bin: $(BUILD_DIR)/$(PROJECT).elf
 	@echo [BIN] $@
 	@$(OBJCOPY) -O binary $< $@
@@ -102,12 +129,10 @@ $(BUILD_DIR)/$(PROJECT).bin: $(BUILD_DIR)/$(PROJECT).elf
 # 🚀 Flashing and Debugging
 ################################################################################
 
-# Flash binary using STM32CubeProgrammer
 flash: $(BUILD_DIR)/$(PROJECT).bin
 	@echo [FLASH] Programming MCU...
 	@STM32_Programmer_CLI -c port=SWD -d $< 0x08000000 -rst
 
-# Debug session with OpenOCD + GDB
 debug: $(BUILD_DIR)/$(PROJECT).elf
 	@echo [DEBUG] Starting OpenOCD + GDB...
 	@$(OPENOCD) -f interface/stlink.cfg -f target/stm32f1x.cfg &
@@ -119,7 +144,6 @@ debug: $(BUILD_DIR)/$(PROJECT).elf
 	        -ex "continue" \
 	        $(BUILD_DIR)/$(PROJECT).elf
 
-# Chip erase (full)
 erase:
 	@echo [ERASE] Erasing MCU flash...
 	@STM32_Programmer_CLI -c port=SWD -e all

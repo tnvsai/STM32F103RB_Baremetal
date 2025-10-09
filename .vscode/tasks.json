@@ -2,10 +2,10 @@
     "version": "2.0.0",
     "tasks": [
         {
-            "label": "build",
+            "label": "build application",
             "type": "shell",
             "command": "make",
-            "args": [],
+            "args": ["TARGET=application"],
             "group": {
                 "kind": "build",
                 "isDefault": true
@@ -16,7 +16,19 @@
             "label": "clean",
             "type": "shell",
             "command": "make",
-            "args": ["clean"]
+            "args": ["clean"],
+            "group": {
+                "kind": "build"
+            }
+        },
+        {
+            "label": "flash application",
+            "type": "shell",
+            "command": "make",
+            "args": ["TARGET=application", "flash"],
+            "group": {
+                "kind": "build"
+            }
         }
     ]
 }

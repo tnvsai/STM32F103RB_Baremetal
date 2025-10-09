@@ -7,7 +7,7 @@
             "request": "launch",
             "servertype": "openocd",
             "cwd": "${workspaceFolder}",
-            "executable": "${workspaceFolder}/build/main.elf",
+            "executable": "${workspaceFolder}/build/application/main.elf",
             "device": "STM32F103RB",
             "configFiles": [
                 "interface/stlink.cfg",
@@ -15,7 +15,7 @@
             ],
             "svdFile": "${workspaceFolder}/STM32F103.svd",
             "runToMain": true,
-            "preLaunchTask": "build"
+            "preLaunchTask": "build application"
         },
         {
             "name": "Debug with ST-LINK GDB Server",
@@ -23,10 +23,10 @@
             "request": "launch",
             "servertype": "stlink",
             "cwd": "${workspaceFolder}",
-            "executable": "${workspaceFolder}/build/main.elf",
+            "executable": "${workspaceFolder}/build/application/main.elf",
             "device": "STM32F103RB",
             "runToMain": true,
-            "preLaunchTask": "build",
+            "preLaunchTask": "build application",
             "serverpath": "C:/ST/STM32CubeIDE_1.16.1/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.stlink-gdb-server.win32_2.2.200.202505060755/tools/bin/ST-LINK_gdbserver.exe",
             "gdbpath": "arm-none-eabi-gdb"
         }
