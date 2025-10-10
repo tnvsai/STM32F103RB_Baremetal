@@ -563,6 +563,14 @@ typedef struct
 /**
   * @}
   */
+ /** @addtogroup user defined
+  * @{
+  */
+#define BOOTLOADER_START  0x08000000
+#define APPLICATION_START 0x08004000
+/**
+  * @}
+  */
   
 /** @addtogroup Peripheral_memory_map
   * @{

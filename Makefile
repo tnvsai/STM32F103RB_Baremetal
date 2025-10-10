@@ -10,11 +10,15 @@ TARGET ?= application
 
 # Directories based on target
 ifeq ($(TARGET), bootloader)
+TARGET_DEFINES = -DBOOTLOADER
+FLASH_START_ADDRESS = 0x08000000
 TARGET_SRC_DIR     = bootloader/src
 TARGET_INC_DIR     = bootloader/include
 TARGET_LINKER_FILE = bootloader/linker/STM32F103RBTX_BOOT.ld
 BUILD_DIR          = build/bootloader
 else
+TARGET_DEFINES = -DAPPLICATION
+FLASH_START_ADDRESS = 0x08004000
 TARGET_SRC_DIR     = application/src
 TARGET_INC_DIR     = application/include
 TARGET_LINKER_FILE = application/linker/STM32F103RBTX_APP.ld
@@ -40,7 +44,8 @@ OPENOCD = "C:/Program Files/xpack-openocd-0.12.0-6/bin/openocd.exe"
 ################################################################################
 
 CFLAGS = -mcpu=cortex-m3 -mthumb -O0 -g3 -Wall -ffreestanding -fno-builtin \
-         -DSTM32F103xB -I$(TARGET_INC_DIR) -I$(COMMON_INC_DIR)
+         -DSTM32F103xB -I$(TARGET_INC_DIR) -I$(COMMON_INC_DIR) \
+         $(TARGET_DEFINES)
 
 LDFLAGS = -T$(TARGET_LINKER_FILE) -lc -lgcc -Wl,--gc-sections
 
@@ -131,7 +136,7 @@ $(BUILD_DIR)/$(PROJECT).bin: $(BUILD_DIR)/$(PROJECT).elf
 
 flash: $(BUILD_DIR)/$(PROJECT).bin
 	@echo [FLASH] Programming MCU...
-	@STM32_Programmer_CLI -c port=SWD -d $< 0x08000000 -rst
+	@STM32_Programmer_CLI -c port=SWD -d $< $(FLASH_START_ADDRESS) -rst
 
 debug: $(BUILD_DIR)/$(PROJECT).elf
 	@echo [DEBUG] Starting OpenOCD + GDB...
