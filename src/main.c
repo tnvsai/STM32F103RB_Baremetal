@@ -53,6 +53,21 @@ int main(void) {
 
     delay(500000);
 
+    // -------------------- 4) Dynamic value and text Test --------------------
+         mini_printf("5)  Dynamic value and text Testt\r\n");
+         ST7789_FillScreen(ST7789_COLOR_BLACK);
+         for (uint8_t counter=1; counter<6; counter++)
+         {
+            ST7789_mini_printf(10, 50, ST7789_COLOR_YELLOW, ST7789_COLOR_BLACK, 2, "%d: JAI SHREE RAM", counter);
+            ST7789_mini_printf(10, 50, ST7789_COLOR_YELLOW, ST7789_COLOR_WHITE, 2, "%d: JAI SHREE RAM", counter);
+            for(volatile int i=0; i<10000; i++); // simple delay
+            ST7789_mini_printf(10, 50, ST7789_COLOR_CYAN, ST7789_COLOR_BLACK, 2, "%d:OM NAMAH SHIVAIAH", counter);
+            ST7789_mini_printf(10, 50, ST7789_COLOR_YELLOW, ST7789_COLOR_GREEN, 2, "%d:OM NAMAH SHIVAIAH", counter);
+            for(volatile int i=0; i<100000; i++); // simple delay
+         }
+
+    ST7789_FillScreen(ST7789_COLOR_BLACK);
+    ST7789_DrawStringScaled(10, 50, "ALL TESTS COMPLETED", ST7789_COLOR_GREEN, ST7789_COLOR_BLACK, 4);
     mini_printf("=== ST7789 API Test Finished ===\r\n");
 
     while(1) {

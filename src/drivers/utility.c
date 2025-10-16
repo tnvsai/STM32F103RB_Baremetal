@@ -1,12 +1,8 @@
-#include "stm32f103xb.h"
 #include "utility.h"
-#include "uart.h"
-#include <stdarg.h>
-#include <stdint.h>
 
 #define LED_PIN 5
 
-static bool ledInitilised = false;
+static uint8_t ledInitilised = FALSE;
 
 // ---------------- GPIO Init ----------------
 static void LED_Init(void)
@@ -17,7 +13,7 @@ static void LED_Init(void)
     // Configure PA5 as output push-pull, 2 MHz
     GPIOA->CRL &= ~(0xF << (LED_PIN * 4));
     GPIOA->CRL |= (0x2 << (LED_PIN * 4));
-    ledInitilised = true;
+    ledInitilised = TRUE;
 }
 
 // ---------------- LED Toggle ----------------
@@ -53,25 +49,29 @@ void LED_Off(void)
 #include <stdint.h>
 
 static void u32_to_str(uint32_t value, char *buf) {
-    char temp[11];
-    int i = 0;
-
+    // Handle zero explicitly
     if (value == 0) {
         buf[0] = '0';
         buf[1] = '\0';
         return;
     }
 
+    char temp[10];   // max 10 digits for uint32_t
+    int i = 0;
+
+    // Extract digits in reverse order
     while (value > 0) {
-        temp[i++] = (value % 10) + '0';
+        temp[i++] = '0' + (value % 10);
         value /= 10;
     }
 
+    // Reverse digits directly into output buffer
     for (int j = 0; j < i; j++) {
         buf[j] = temp[i - j - 1];
     }
-    buf[i] = '\0';
+    buf[i] = '\0';  // Null-terminate
 }
+
 
 static void u32_to_hex(uint32_t value, char *buf) {
     for (int i = 0; i < 8; i++) {
@@ -152,3 +152,90 @@ void mini_printf(const char *fmt, ...) {
 
     va_end(args);
 }
+
+// Convert signed integer to string
+static void i32_to_str(int32_t val, char *buf) {
+    if(val < 0) {
+        *buf++ = '-';
+        u32_to_str(-val, buf);
+    } else {
+        u32_to_str(val, buf);
+    }
+}
+
+
+// Convert float to string with 1 decimal (fixed-point)
+static void float_to_str(float val, char *buf) {
+    int32_t int_part = (int32_t)val;
+    int32_t frac = (int32_t)((val - int_part) * 10); // 1 decimal
+    if(frac < 0) frac = -frac;
+    i32_to_str(int_part, buf);
+    while(*buf) buf++;          // move to end
+    *buf++ = '.';
+    *buf++ = '0' + frac;
+    *buf = 0;
+}
+
+
+void ST7789_mini_printf(uint16_t x, uint16_t y, uint16_t color, uint16_t bg, uint8_t scale, const char *fmt, ...) {
+    char buf[16];
+    va_list args;
+    va_start(args, fmt);
+
+    while(*fmt) {
+        if(*fmt == '%') {
+            fmt++;
+            switch(*fmt) {
+                case 'd': {
+                    int val = va_arg(args, int);
+                    i32_to_str(val, buf);
+                    ST7789_DrawStringScaled(x, y, buf, color, bg, scale);
+                    x += strlen(buf)*6*scale;
+                    break;
+                }
+                case 'u': {
+                    unsigned int val = va_arg(args, unsigned int);
+                    u32_to_str(val, buf);
+                    ST7789_DrawStringScaled(x, y, buf, color, bg, scale);
+                    x += strlen(buf)*6*scale;
+                    break;
+                }
+                case 'f': {
+                    double val = va_arg(args, double); // float promoted to double
+                    float_to_str((float)val, buf);
+                    ST7789_DrawStringScaled(x, y, buf, color, bg, scale);
+                    x += strlen(buf)*6*scale;
+                    break;
+                }
+                case 's': {
+                    char *str = va_arg(args, char*);
+                    ST7789_DrawStringScaled(x, y, str, color, bg, scale);
+                    x += strlen(str)*6*scale;
+                    break;
+                }
+                case 'c': {
+                    char c = (char)va_arg(args, int);
+                    char ch[2] = {c, 0};
+                    ST7789_DrawStringScaled(x, y, ch, color, bg, scale);
+                    x += 6*scale;
+                    break;
+                }
+                case '%': {
+                    char ch[2] = {'%',0};
+                    ST7789_DrawStringScaled(x, y, ch, color, bg, scale);
+                    x += 6*scale;
+                    break;
+                }
+                default: break;
+            }
+        } else {
+            char ch[2] = {*fmt,0};
+            ST7789_DrawStringScaled(x, y, ch, color, bg, scale);
+            x += 6*scale;
+        }
+        fmt++;
+    }
+
+    va_end(args);
+}
+
