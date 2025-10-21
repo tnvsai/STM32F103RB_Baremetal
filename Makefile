@@ -33,6 +33,9 @@ CFLAGS = -mcpu=cortex-m3 -mthumb -O0 -g3 -Wall -ffreestanding -fno-builtin \
 # Linker options
 LDFLAGS = -T$(LINKER_DIR)/STM32F103RBTX_FLASH.ld \
            -lc -lgcc -lnosys -Wl,--gc-sections
+		   
+# Generate .map file
+LDFLAGS += -Wl,-Map=build/output.map
 
 ################################################################################
 # 📂 Source and Object Management
