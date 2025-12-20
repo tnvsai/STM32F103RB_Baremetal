@@ -159,11 +159,11 @@ erase:
 
 clean:
 ifeq ($(OS),Windows_NT)
-	@if exist "$(BUILD_DIR)" rmdir /S /Q "$(BUILD_DIR)"
+	@if exist "build" rmdir /S /Q "build"
 else
-	@rm -rf $(BUILD_DIR)
+	@rm -rf build
 endif
-	@echo [CLEAN] Removed build directory.
+	@echo [CLEAN] Removed entire build directory.
 
 ################################################################################
 # 📘 Phony Targets
