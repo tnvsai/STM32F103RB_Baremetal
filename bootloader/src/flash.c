@@ -61,15 +61,17 @@ Flash_Status_t Flash_EraseAppRegion(void) {
 }
 
 // Program a 16-bit half-word
+// Program a 16-bit half-word (Assumes Flash is Unlocked)
 Flash_Status_t Flash_ProgramHalfWord(uint32_t address, uint16_t data) {
     if (address & 0x1) return FLASH_ERROR_PROGRAM; // must be half-word aligned
 
-    Flash_Unlock();
+    // Wait for any previous operation
+    while (FLASH->SR & FLASH_SR_BSY);
+
     FLASH->CR |= FLASH_CR_PG;                  // enable programming
     *((volatile uint16_t *)address) = data;
     Flash_Status_t status = Flash_WaitForLastOperation();
     FLASH->CR &= ~FLASH_CR_PG;                 // disable programming
-    Flash_Lock();
 
     return status;
 }
