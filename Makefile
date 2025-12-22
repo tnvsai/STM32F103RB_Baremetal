@@ -33,6 +33,9 @@ CFLAGS = -mcpu=cortex-m3 -mthumb -O0 -g3 -Wall -ffreestanding -fno-builtin \
 # Linker options
 LDFLAGS = -T$(LINKER_DIR)/STM32F103RBTX_FLASH.ld \
            -lc -lgcc -lnosys -Wl,--gc-sections
+		   
+# Generate .map file
+LDFLAGS += -Wl,-Map=build/output.map
 
 ################################################################################
 # 📂 Source and Object Management
@@ -55,7 +58,7 @@ BUILD_SUBDIRS := $(sort $(dir $(OBJECTS)))
 # 🎯 Default Target
 ################################################################################
 
-all: $(BUILD_DIR)/$(PROJECT).elf $(BUILD_DIR)/$(PROJECT).bin
+all: $(BUILD_DIR)/$(PROJECT).elf $(BUILD_DIR)/$(PROJECT).bin $(BUILD_DIR)/$(PROJECT).hex
 
 ################################################################################
 # 🧱 Directory Creation
@@ -98,13 +101,22 @@ $(BUILD_DIR)/$(PROJECT).bin: $(BUILD_DIR)/$(PROJECT).elf
 	@echo [BIN] $@
 	@$(OBJCOPY) -O binary $< $@
 
+$(BUILD_DIR)/$(PROJECT).hex: $(BUILD_DIR)/$(PROJECT).elf
+	@echo [HEX] $@
+	@$(OBJCOPY) -O ihex $< $@
+
 ################################################################################
 # 🚀 Flashing and Debugging
 ################################################################################
 
-# Flash binary using STM32CubeProgrammer
+# Flash BIN file
 flash: $(BUILD_DIR)/$(PROJECT).bin
-	@echo [FLASH] Programming MCU...
+	@echo [FLASH] Programming MCU with BIN...
+	@STM32_Programmer_CLI -c port=SWD -d $< 0x08000000 -rst
+
+# Flash HEX file
+flash-hex: $(BUILD_DIR)/$(PROJECT).hex
+	@echo [FLASH] Programming MCU with HEX...
 	@STM32_Programmer_CLI -c port=SWD -d $< 0x08000000 -rst
 
 # Debug session with OpenOCD + GDB
@@ -140,4 +152,4 @@ endif
 # 📘 Phony Targets
 ################################################################################
 
-.PHONY: all clean flash debug erase
+.PHONY: all clean flash flash-hex debug erase

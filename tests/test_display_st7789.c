@@ -10,8 +10,8 @@ VCC	3.3V	Power supply
 GND	GND	Ground
 SCL (SCK)	PB13	SPI2 Clock
 SDA (MOSI)	PB15	SPI2 MOSI
-DC	PB11	Data/Command selection
 RESET	PB12	Hardware reset
+DC	PB11	Data/Command selection
 CS	Not used	Display always selected
 LED	3.3V	Backlight
 
@@ -68,7 +68,7 @@ int main(void) {
 
     // -------------------- 4) Dynamic value and text Test --------------------
          mini_printf("5)  Dynamic value and text Testt\r\n");
-         for (uint8_t counter=1, counter<6; counter++)
+         for (uint8_t counter=1; counter<6; counter++)
          {
             ST7789_mini_printf(10, 50, ST7789_COLOR_YELLOW, ST7789_COLOR_BLACK, 2, "%d: JAI SHREE RAM", counter);
             ST7789_mini_printf(10, 50, ST7789_COLOR_YELLOW, ST7789_COLOR_WHITE, 2, "%d: JAI SHREE RAM", counter);
