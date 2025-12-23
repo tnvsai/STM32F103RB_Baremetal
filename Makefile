@@ -2,14 +2,12 @@
 # 🧩 Project Configuration
 ################################################################################
 
-# Project name
-PROJECT = main
-
 # Target selection: bootloader or application
 TARGET ?= application
 
 # Directories based on target
 ifeq ($(TARGET), bootloader)
+    PROJECT = bootloader
     TARGET_DEFINES = -DBOOTLOADER -DBOOTLOADER_START=0x08000000
     FLASH_START_ADDRESS = 0x08000000
     TARGET_SRC_DIR     = bootloader/src
@@ -17,7 +15,7 @@ ifeq ($(TARGET), bootloader)
     TARGET_LINKER_FILE = bootloader/linker/STM32F103RBTX_BOOT.ld
     BUILD_DIR          = build/bootloader
 else
-    # Explicitly defining start address ensures system_stm32f1xx.c sees it reliably
+    PROJECT = app
     TARGET_DEFINES = -DAPPLICATION -DAPPLICATION_START=0x08004000
     FLASH_START_ADDRESS = 0x08004000
     TARGET_SRC_DIR     = application/src
@@ -81,7 +79,7 @@ BUILD_SUBDIRS := $(sort $(dir $(OBJECTS)))
 # 🎯 Default Target
 ################################################################################
 
-all: $(BUILD_DIR)/$(PROJECT).elf $(BUILD_DIR)/$(PROJECT).bin
+all: $(BUILD_DIR)/$(PROJECT).elf $(BUILD_DIR)/$(PROJECT).bin $(BUILD_DIR)/$(PROJECT).hex
 
 ################################################################################
 # 🧱 Create Build Directories
@@ -131,6 +129,10 @@ $(BUILD_DIR)/$(PROJECT).bin: $(BUILD_DIR)/$(PROJECT).elf
 	@echo [BIN] $@
 	@$(OBJCOPY) -O binary $< $@
 
+$(BUILD_DIR)/$(PROJECT).hex: $(BUILD_DIR)/$(PROJECT).elf
+	@echo [HEX] $@
+	@$(OBJCOPY) -O ihex $< $@
+
 ################################################################################
 # 🚀 Flashing and Debugging
 ################################################################################
@@ -155,6 +157,48 @@ erase:
 	@STM32_Programmer_CLI -c port=SWD -e all
 
 ################################################################################
+# 🔥 Convenient Shortcuts
+################################################################################
+
+.PHONY: bl app both flash-bl flash-app size
+
+# Short aliases for building
+bl:
+	@$(MAKE) TARGET=bootloader
+
+app:
+	@$(MAKE) TARGET=application
+
+both: bl app
+
+# Flash shortcuts
+flash-bl: bl
+	@echo [FLASH] Programming Bootloader...
+	@STM32_Programmer_CLI -c port=SWD -d build/bootloader/bootloader.bin 0x08000000 -rst
+
+flash-app: app
+	@echo [FLASH] Programming Application...
+	@STM32_Programmer_CLI -c port=SWD -d build/application/app.bin 0x08004000 -rst
+
+flash-both: both
+	@echo [FLASH] Programming Bootloader + Application...
+	@STM32_Programmer_CLI -c port=SWD -d build/bootloader/bootloader.bin 0x08000000
+	@STM32_Programmer_CLI -c port=SWD -d build/application/app.bin 0x08004000 -rst
+
+# Size report
+size:
+	@echo "==================================="
+	@echo "         Size Report"
+	@echo "==================================="
+	@if exist "build\\bootloader\\bootloader.elf" (\
+		echo Bootloader: & $(SIZE) build/bootloader/bootloader.elf\
+	)
+	@if exist "build\\application\\app.elf" (\
+		echo Application: & $(SIZE) build/application/app.elf\
+	)
+	@echo "==================================="
+
+################################################################################
 # 🧹 Cleaning
 ################################################################################
 
@@ -170,4 +214,4 @@ endif
 # 📘 Phony Targets
 ################################################################################
 
-.PHONY: all clean flash debug erase
+.PHONY: all clean flash debug erase bl app both flash-bl flash-app flash-both size
