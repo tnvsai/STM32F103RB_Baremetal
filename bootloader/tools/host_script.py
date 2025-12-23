@@ -13,9 +13,6 @@ except ImportError:
     msvcrt = None
 
 # Commands
-CMD_GET_HELP   = 0x50
-CMD_GET_VER    = 0x51
-CMD_GET_CID    = 0x52
 CMD_GO         = 0x55
 CMD_ERASE_APP  = 0x56
 CMD_WRITE_MEM  = 0x57
@@ -63,8 +60,8 @@ def validate_address(addr, length, operation="access"):
 def send_cmd(ser, cmd):
     ser.write(bytes([cmd]))
 
-# --- Helper Functions for Log Filtering ---
 rx_buffer = bytearray()
+quiet_mode = False
 
 def read_one_byte(ser):
     global rx_buffer
@@ -80,11 +77,12 @@ def read_one_byte(ser):
             
             if potential_suffix == b'LOG] ':
                 line = ser.readline()
-                try:
-                    msg = line.decode('utf-8', errors='ignore').strip()
-                    print(f"[LOG] {msg}") 
-                except:
-                    print(f"[Raw Log] {line}")
+                if not quiet_mode:
+                    try:
+                        msg = line.decode('utf-8', errors='ignore').strip()
+                        print(f"[LOG] {msg}") 
+                    except:
+                        print(f"[Raw Log] {line}")
                 continue
             else:
                 rx_buffer.extend(b)
@@ -102,31 +100,6 @@ def read_bytes(ser, n):
     return bytes(data)
 
 # --- Commands ---
-
-def cmd_get_ver(ser):
-    print("Sending GET_VER...")
-    send_cmd(ser, CMD_GET_VER)
-    ver = read_bytes(ser, 1)
-    if len(ver) == 1:
-        print(f"Bootloader Version: 0x{ver[0]:02X}")
-    else:
-        print("Failed to get version (Timeout)")
-
-def cmd_get_help(ser):
-    print("Sending GET_HELP...")
-    send_cmd(ser, CMD_GET_HELP)
-    time.sleep(0.5)
-    read_bytes(ser, 1) 
-
-def cmd_get_cid(ser):
-    print("Sending GET_CID...")
-    send_cmd(ser, CMD_GET_CID)
-    cid = read_bytes(ser, 2)
-    if len(cid) == 2:
-        val = (cid[1] << 8) | cid[0]
-        print(f"Chip ID: 0x{val:04X}")
-    else:
-        print("Failed to get CID")
 
 def cmd_erase(ser):
     print("Erasing Application Region...")
@@ -383,8 +356,6 @@ def run_shell(ser):
             
         elif cmd == "help":
             print("Commands:")
-            print("  ver          - Get Version")
-            print("  cid          - Get Chip ID")
             print("  erase        - Erase App Region")
             print("  flash <file> - Write Binary File")
             print("  read <addr> <len> - Read Memory")
@@ -395,12 +366,6 @@ def run_shell(ser):
         
         elif cmd == "monitor":
             cmd_monitor(ser)
-            
-        elif cmd == "ver":
-            cmd_get_ver(ser)
-            
-        elif cmd == "cid":
-            cmd_get_cid(ser)
             
         elif cmd == "erase":
             cmd_erase(ser)
@@ -452,16 +417,16 @@ def main():
     parser.add_argument("port", help="Serial Port (e.g. COM3 or /dev/ttyUSB0)")
     parser.add_argument("--baud", type=int, default=115200, help="Baud rate")
     
-    parser.add_argument("--ver", action="store_true", help="Get Version")
-    parser.add_argument("--cid", action="store_true", help="Get Chip ID")
     parser.add_argument("--erase", action="store_true", help="Erase Application")
-    parser.add_argument("--test-sig", action="store_true", help="Test critical write (2 bytes)")
-    parser.add_argument("--echo-test", action="store_true", help="Debug Echo (4 bytes)")
     parser.add_argument("--write", type=str, help="Binary file to write")
     parser.add_argument("--addr", type=lambda x: int(x,0), default=APP_START, help=f"Start Address (default 0x{APP_START:08X})")
     parser.add_argument("--jump", action="store_true", help="Jump to Application")
+    parser.add_argument("-q", "--quiet", action="store_true", help="Suppress bootloader logs")
 
     args = parser.parse_args()
+    
+    global quiet_mode
+    quiet_mode = args.quiet
 
     try:
         ser = serial.Serial(args.port, args.baud, timeout=1)
@@ -471,20 +436,13 @@ def main():
     
     ser.read_all()
     
-    actions = [args.ver, args.cid, args.erase, args.test_sig, args.echo_test, args.write, args.jump]
+    actions = [args.erase, args.write, args.jump]
     
     if any(actions):
-        if args.ver: cmd_get_ver(ser)
-        if args.cid: cmd_get_cid(ser)
         if args.erase: 
             cmd_erase(ser)
             time.sleep(0.1)
-        if args.test_sig: 
-            print("Test Sig deprecated. Use interactive shell instead.") 
-            
         if args.write: cmd_write(ser, args.write, args.addr)
-        if args.echo_test:
-             print("Use shell for tests.")
         if args.jump: cmd_jump(ser)
         
     else:
