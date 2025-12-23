@@ -4,6 +4,7 @@ import argparse
 import sys
 import struct
 import threading
+from contextlib import contextmanager
 
 # Check for Windows to import msvcrt for keyboard input
 try:
@@ -17,16 +18,48 @@ CMD_GET_VER    = 0x51
 CMD_GET_CID    = 0x52
 CMD_GO         = 0x55
 CMD_ERASE_APP  = 0x56
-CMD_ERASE_APP  = 0x56
 CMD_WRITE_MEM  = 0x57
 CMD_READ_MEM   = 0x59
 
 ACK  = 0x06
 NACK = 0x15
 
+# Configuration Constants
+CHUNK_SIZE = 16
+BYTE_TX_DELAY = 0.005
+CHUNK_DELAY = 0.02
+RETRY_COUNT = 3
+ERASE_TIMEOUT = 10
+WRITE_TIMEOUT = 2
+
+# Flash Memory Map
+FLASH_START = 0x08000000
+FLASH_END = 0x08020000  # 128KB total
+BOOTLOADER_SIZE = 0x4000  # 16KB
+APP_START = FLASH_START + BOOTLOADER_SIZE
+APP_END = FLASH_END
+
 def get_crc(data):
     # If using CRC protocol later. Not used in simple implementation.
     return 0
+
+@contextmanager
+def temp_timeout(ser, timeout_sec):
+    """Context manager for temporary serial timeout"""
+    old_timeout = ser.timeout
+    ser.timeout = timeout_sec
+    try:
+        yield
+    finally:
+        ser.timeout = old_timeout
+
+def validate_address(addr, length, operation="access"):
+    """Validate flash address range"""
+    if addr < FLASH_START or addr >= FLASH_END:
+        raise ValueError(f"Address 0x{addr:08X} out of flash range (0x{FLASH_START:08X}-0x{FLASH_END:08X})")
+    if addr + length > FLASH_END:
+        raise ValueError(f"{operation.capitalize()} of {length} bytes at 0x{addr:08X} exceeds flash end")
+    return True
 
 def send_cmd(ser, cmd):
     ser.write(bytes([cmd]))
@@ -133,16 +166,58 @@ def cmd_erase(ser):
     send_cmd(ser, CMD_ERASE_APP)
     
     # Wait for ACK (timeout extended for erase)
-    ser.timeout = 10 
-    resp = read_bytes(ser, 1)
-    ser.timeout = 1 # Restore
+    with temp_timeout(ser, ERASE_TIMEOUT):
+        resp = read_bytes(ser, 1)
     
     if resp == bytes([ACK]):
         print("Erase Success!")
+        return True
     elif resp == bytes([NACK]):
         print("Erase Failed!")
+        return False
     else:
         print(f"Erase Timeout or Error. Resp: {resp}")
+        return False
+
+
+
+
+def cmd_read(ser, addr, length):
+    global rx_buffer
+    
+    # Validate address range
+    try:
+        validate_address(addr, length, "read")
+    except ValueError as e:
+        print(f"Error: {e}")
+        return
+    
+    print(f"Reading {length} bytes from 0x{addr:08X}...")
+    ser.reset_input_buffer()
+    rx_buffer = bytearray()  # CRITICAL: Clear global buffer
+    
+    send_cmd(ser, CMD_READ_MEM)
+    if read_bytes(ser, 1) != bytes([ACK]):
+        print("Cmd NACK")
+        return
+        
+    addr_bytes = struct.pack('<I', addr)
+    for b in addr_bytes:
+        ser.write(bytes([b]))
+        time.sleep(BYTE_TX_DELAY)
+        
+    if read_bytes(ser, 1) != bytes([ACK]):
+        print("Addr NACK")
+        return
+        
+    ser.write(bytes([length]))
+    if read_bytes(ser, 1) != bytes([ACK]):
+        print("Len NACK")
+        return
+        
+    data = read_bytes(ser, length)
+    # Display in reverse order (big-endian/MSB-first) for readability
+    print("Data: " + " ".join([f"{b:02X}" for b in reversed(data)]))
 
 # --- UI Helpers ---
 def print_progress_bar(iteration, total, prefix='', suffix='', length=30, fill='#'):
@@ -159,8 +234,10 @@ def verify_flash_content(ser, addr, data_chunk):
     Reads back memory from addr and compares with data_chunk.
     Returns True if match, False otherwise.
     """
+    global rx_buffer
     try:
         ser.reset_input_buffer()
+        rx_buffer = bytearray()  # Clear global buffer
         send_cmd(ser, CMD_READ_MEM)
         if read_bytes(ser, 1) != bytes([ACK]): return False
         
@@ -168,7 +245,7 @@ def verify_flash_content(ser, addr, data_chunk):
         addr_bytes = struct.pack('<I', addr)
         for b in addr_bytes:
             ser.write(bytes([b]))
-            time.sleep(0.005)
+            time.sleep(BYTE_TX_DELAY)
         if read_bytes(ser, 1) != bytes([ACK]): return False
         
         # Len
@@ -190,13 +267,13 @@ def cmd_write(ser, filepath, start_address):
             data = f.read()
     except FileNotFoundError:
         print("File not found.")
-        return
+        return False
 
     # Pad data
     if len(data) % 2 != 0:
         data += b'\xFF'
 
-    chunk_size = 16 
+    chunk_size = CHUNK_SIZE 
     total_len = len(data)
     total_written = 0
     
@@ -208,7 +285,7 @@ def cmd_write(ser, filepath, start_address):
         addr = start_address + i
         
         success = False
-        for attempt in range(3):
+        for attempt in range(RETRY_COUNT):
             try:
                 # --- Chunk Write Logic ---
                 # 1. Command
@@ -221,7 +298,7 @@ def cmd_write(ser, filepath, start_address):
                 addr_bytes = struct.pack('<I', addr)
                 for b in addr_bytes:
                     ser.write(bytes([b]))
-                    time.sleep(0.005)
+                    time.sleep(BYTE_TX_DELAY)
                 
                 if read_bytes(ser, 1) != bytes([ACK]):
                     print(f"\n[Retry {attempt+1}] No ACK for ADDR at 0x{addr:08X}"); continue
@@ -234,12 +311,11 @@ def cmd_write(ser, filepath, start_address):
                 # 4. Data
                 for b in chunk:
                     ser.write(bytes([b]))
-                    time.sleep(0.005)
+                    time.sleep(BYTE_TX_DELAY)
                 
                 # 5. Final ACK
-                ser.timeout = 2
-                resp = read_bytes(ser, 1)
-                ser.timeout = 1
+                with temp_timeout(ser, WRITE_TIMEOUT):
+                    resp = read_bytes(ser, 1)
                 
                 if resp != bytes([ACK]):
                      # Check if it was a Lost ACK for a successful write?
@@ -266,14 +342,15 @@ def cmd_write(ser, filepath, start_address):
 
         if not success:
             print(f"\nFailed to write chunk at 0x{addr:08X} after 3 attempts.")
-            return
+            return False
 
         total_written += len(chunk)
         print_progress_bar(total_written, total_len, prefix='Writing:', suffix='Complete', length=40)
         
-        time.sleep(0.02) # Reduced delay slightly as we have retries
+        time.sleep(CHUNK_DELAY) # Inter-chunk delay
         
     print("\nWrite Complete.")
+    return True
 
 def cmd_jump(ser):
     print("Sending Jump Command...")
@@ -349,8 +426,9 @@ def run_shell(ser):
         args = parts[1:]
         
         # Flush serial input before any command to remove old logs/junk
+        global rx_buffer
         ser.reset_input_buffer()
-        rx_buffer = bytearray() # Clear sw buffer too
+        rx_buffer = bytearray() # Clear global buffer
         
         if cmd in ["exit", "quit"]:
             break
@@ -361,6 +439,7 @@ def run_shell(ser):
             print("  cid          - Get Chip ID")
             print("  erase        - Erase App Region")
             print("  flash <file> - Write Binary File")
+            print("  read <addr> <len> - Read Memory")
             print("  jump         - Jump to App")
             print("  monitor      - Serial Monitor (Ctrl+C to quit)")
             print("  help         - Show this list")
@@ -386,13 +465,33 @@ def run_shell(ser):
             
             # Auto-Erase before flash
             # We must erase because STM32 flash can only be written if 0xFFFF
-            cmd_erase(ser)
+            if not cmd_erase(ser):
+                print("Aborting Flash: Erase Failed.")
+                continue
+                
             time.sleep(0.1) 
             
-            cmd_write(ser, args[0], 0x08004000)
+            if cmd_write(ser, args[0], APP_START):
+                print("Flashing Successful. Jumping to Application...")
+                time.sleep(0.5)
+                cmd_jump(ser)
+                
+                # Auto-switch to monitor
+                print("Switching to Monitor Mode...")
+                time.sleep(0.5)
+                cmd_monitor(ser)
             
         elif cmd == "jump":
             cmd_jump(ser)
+            
+
+        elif cmd == "read":
+            if len(args) < 2:
+                print("Usage: read <addr> <len>")
+                continue
+            addr = int(args[0], 0)
+            length = int(args[1], 0)
+            cmd_read(ser, addr, length)
             
         else:
             print("Unknown command. Type 'help'.")
@@ -410,7 +509,7 @@ def main():
     parser.add_argument("--test-sig", action="store_true", help="Test critical write (2 bytes)")
     parser.add_argument("--echo-test", action="store_true", help="Debug Echo (4 bytes)")
     parser.add_argument("--write", type=str, help="Binary file to write")
-    parser.add_argument("--addr", type=lambda x: int(x,0), default=0x08004000, help="Start Address (default 0x08004000)")
+    parser.add_argument("--addr", type=lambda x: int(x,0), default=APP_START, help=f"Start Address (default 0x{APP_START:08X})")
     parser.add_argument("--jump", action="store_true", help="Jump to Application")
 
     args = parser.parse_args()
@@ -435,12 +534,7 @@ def main():
             cmd_erase(ser)
             time.sleep(0.1)
         if args.test_sig: 
-            # (Test Sig logic would need to call a function, but it's inline in old code. 
-            #  For now, let's just say Interactive Shell is the way forward.
-            #  If user really wants test-sig, they can duplicate logic or I can move it.
-            #  For brevity, I will omit inline test-sig logic here as it was for debugging.
-            print("Test Sig deprecated in interactive update. Use Shell.")
-            pass 
+            print("Test Sig deprecated. Use interactive shell instead.") 
             
         if args.write: cmd_write(ser, args.write, args.addr)
         if args.echo_test:

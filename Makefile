@@ -10,19 +10,20 @@ TARGET ?= application
 
 # Directories based on target
 ifeq ($(TARGET), bootloader)
-TARGET_DEFINES = -DBOOTLOADER
-FLASH_START_ADDRESS = 0x08000000
-TARGET_SRC_DIR     = bootloader/src
-TARGET_INC_DIR     = bootloader/include
-TARGET_LINKER_FILE = bootloader/linker/STM32F103RBTX_BOOT.ld
-BUILD_DIR          = build/bootloader
+    TARGET_DEFINES = -DBOOTLOADER -DBOOTLOADER_START=0x08000000
+    FLASH_START_ADDRESS = 0x08000000
+    TARGET_SRC_DIR     = bootloader/src
+    TARGET_INC_DIR     = bootloader/include
+    TARGET_LINKER_FILE = bootloader/linker/STM32F103RBTX_BOOT.ld
+    BUILD_DIR          = build/bootloader
 else
-TARGET_DEFINES = -DAPPLICATION
-FLASH_START_ADDRESS = 0x08004000
-TARGET_SRC_DIR     = application/src
-TARGET_INC_DIR     = application/include
-TARGET_LINKER_FILE = application/linker/STM32F103RBTX_APP.ld
-BUILD_DIR          = build/application
+    # Explicitly defining start address ensures system_stm32f1xx.c sees it reliably
+    TARGET_DEFINES = -DAPPLICATION -DAPPLICATION_START=0x08004000
+    FLASH_START_ADDRESS = 0x08004000
+    TARGET_SRC_DIR     = application/src
+    TARGET_INC_DIR     = application/include
+    TARGET_LINKER_FILE = application/linker/STM32F103RBTX_APP.ld
+    BUILD_DIR          = build/application
 endif
 
 # Common code

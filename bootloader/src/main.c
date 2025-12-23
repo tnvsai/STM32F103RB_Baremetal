@@ -182,6 +182,14 @@ void Bootloader_ProcessCommand(uint8_t cmd) {
                 // Toggle LED to show liveness
                 if((i%3) == 0) GPIOA->ODR ^= (1 << 5); 
 
+                // Smart Write: Check if already written (Idempotency)
+                uint16_t current_val = *((volatile uint16_t*)(addr + i));
+                
+                if (current_val == data) {
+                    // Already matches, skip write (prevent PGERR)
+                    continue; 
+                }
+
                 Flash_Status_t f_status = Flash_ProgramHalfWord(addr + i, data);
                 if (f_status != FLASH_OK) {
                     status = (uint8_t)f_status; 
@@ -212,20 +220,28 @@ void Bootloader_ProcessCommand(uint8_t cmd) {
             break;
             
         case BL_CMD_READ_MEM:
+             // Toggle LED to show we reached this case
+             GPIOA->ODR ^= (1 << 5);
+             
+             // NO LOGS - Minimal test
              UART_WriteChar(USART2, 0x06); // ACK CMD
              
-             // Protocol: [ADDR 4B] -> ACK -> [LEN 1B] -> ACK -> [DATA]
+             // Read Address (4 bytes)
              UART_ReadBuffer(USART2, (uint8_t*)&addr, 4);
              UART_WriteChar(USART2, 0x06); // ACK ADDR
              
+             // Read Length
              len = (uint8_t)UART_ReadChar(USART2);
              UART_WriteChar(USART2, 0x06); // ACK LEN
              
-             // Read from Memory and Send
+             // Read from Memory and Send Data
              for (uint8_t i = 0; i < len; i++) {
                  uint8_t data = *((volatile uint8_t*)(addr + i));
                  UART_WriteChar(USART2, data);
              }
+             
+             // Toggle LED again to show completion
+             GPIOA->ODR ^= (1 << 5);
              break;
             
         default:
