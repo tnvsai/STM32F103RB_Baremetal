@@ -165,12 +165,17 @@ def cmd_erase(ser):
     print("Erasing Application Region...")
     send_cmd(ser, CMD_ERASE_APP)
     
+    # Start timing
+    start_time = time.time()
+    
     # Wait for ACK (timeout extended for erase)
     with temp_timeout(ser, ERASE_TIMEOUT):
         resp = read_bytes(ser, 1)
     
+    elapsed_time = time.time() - start_time
+    
     if resp == bytes([ACK]):
-        print("Erase Success!")
+        print(f"Erase Success! ({elapsed_time:.2f}s)")
         return True
     elif resp == bytes([NACK]):
         print("Erase Failed!")
@@ -277,6 +282,9 @@ def cmd_write(ser, filepath, start_address):
     total_len = len(data)
     total_written = 0
     
+    # Start timing
+    start_time = time.time()
+    
     print(f"Writing {total_len} bytes to 0x{start_address:08X}...")
     print_progress_bar(0, total_len, prefix='Writing:', suffix='Complete', length=40)
 
@@ -349,7 +357,8 @@ def cmd_write(ser, filepath, start_address):
         
         time.sleep(CHUNK_DELAY) # Inter-chunk delay
         
-    print("\nWrite Complete.")
+    elapsed_time = time.time() - start_time
+    print(f"\nWrite Complete in {elapsed_time:.2f} seconds ({total_len/elapsed_time:.0f} bytes/sec)")
     return True
 
 def cmd_jump(ser):
@@ -463,6 +472,9 @@ def run_shell(ser):
                 print("Usage: flash <filename>")
                 continue
             
+            # Start overall timing
+            flash_start = time.time()
+            
             # Auto-Erase before flash
             # We must erase because STM32 flash can only be written if 0xFFFF
             if not cmd_erase(ser):
@@ -472,7 +484,11 @@ def run_shell(ser):
             time.sleep(0.1) 
             
             if cmd_write(ser, args[0], APP_START):
-                print("Flashing Successful. Jumping to Application...")
+                total_elapsed = time.time() - flash_start
+                print(f"\n{'='*50}")
+                print(f"Flashing Complete! Total time: {total_elapsed:.2f}s")
+                print(f"{'='*50}")
+                print("Jumping to Application...")
                 time.sleep(0.5)
                 cmd_jump(ser)
                 
