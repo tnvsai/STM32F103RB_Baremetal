@@ -47,16 +47,15 @@ int main(void)
 
 
     // 2. Check User Button (PC13)
-    // PC13 is Active Low (Pressed = 0) on Nucleo
+    // PC13 Pressed = 0
     if (GPIOC->IDR & (1 << 13)) {
-        // Button NOT pressed (High) -> Jump to App
         // Button NOT pressed (High) -> Jump to App
         UART_Log(USART2, "Jumping to App...\r\n");
         Bootloader_JumpToUserApp();
     }
     
     UART_Log(USART2, "Bootloader Active v1.0\r\n");
-    UART_Log(USART2, "Waiting for commands...\r\n");
+    UART_Log(USART2, "Waiting for commands... 1=Ver, 2=Help, 3=CID, 4=Go, 5=Erase\r\n");
 
     while (1) {
 
@@ -120,7 +119,7 @@ void Bootloader_JumpToUserApp(void) {
 
 void Bootloader_ProcessCommand(uint8_t cmd) {
     uint8_t len;
-    uint8_t buffer[64]; // Reduced stack usage
+    uint8_t buffer[64]; 
     uint32_t addr;
     
     // Map ASCII to Commands for manual testing
@@ -135,9 +134,8 @@ void Bootloader_ProcessCommand(uint8_t cmd) {
         case BL_CMD_GET_VER:
           UART_Log(USART2, "CMD: Get Version\r\n");
             UART_WriteHex8(USART2, BL_VERSION);
-            // UART_WriteString(USART2, "\r\n"); // Removed to keep protocol clean
+            UART_WriteString(USART2, "\r\n"); 
             break;
-            
         case BL_CMD_GET_HELP:
             UART_Log(USART2, "Help: 1=Ver, 2=Help, 3=CID, 4=Go, 5=Erase\r\n");
             break;
@@ -180,9 +178,9 @@ void Bootloader_ProcessCommand(uint8_t cmd) {
             // NO interrupt disable - let system breathe
             for (int i = 0; i < len; i += 2) {
                 uint16_t data = buffer[i] | (buffer[i+1] << 8);
-                
+
                 // Toggle LED to show liveness
-                GPIOA->ODR ^= (1 << 5); 
+                if((i%3) == 0) GPIOA->ODR ^= (1 << 5); 
 
                 Flash_Status_t f_status = Flash_ProgramHalfWord(addr + i, data);
                 if (f_status != FLASH_OK) {
@@ -203,15 +201,7 @@ void Bootloader_ProcessCommand(uint8_t cmd) {
         case BL_CMD_GO:
             UART_Log(USART2, "Jump to Addr...\r\n");
             // Protocol: [ADDR 4B]
-            UART_ReadBuffer(USART2, (uint8_t*)&addr, 4);
-            
-            if (addr == FLASH_START_ADDRESS) {
-                 Bootloader_JumpToUserApp(); 
-            } else {
-                 // Jump to specific address (raw)
-                 void (*jump_func)(void) = (void*)addr;
-                 jump_func();
-            }
+            Bootloader_JumpToUserApp(); 
             break;
 
         case 0x58: // BL_CMD_DEBUG_ECHO

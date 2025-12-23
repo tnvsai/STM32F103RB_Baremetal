@@ -275,11 +275,9 @@ def cmd_write(ser, filepath, start_address):
         
     print("\nWrite Complete.")
 
-def cmd_jump(ser, address):
-    print(f"Jumping to 0x{address:08X}...")
+def cmd_jump(ser):
+    print("Sending Jump Command...")
     send_cmd(ser, CMD_GO)
-    ser.write(struct.pack('<I', address))
-    # No response expected usually, as MCU jumps
     print("Jump command sent.")
 
 def monitor_rx_thread(ser, stop_event):
@@ -394,7 +392,7 @@ def run_shell(ser):
             cmd_write(ser, args[0], 0x08004000)
             
         elif cmd == "jump":
-            cmd_jump(ser, 0x08004000)
+            cmd_jump(ser)
             
         else:
             print("Unknown command. Type 'help'.")
@@ -448,7 +446,7 @@ def main():
         if args.echo_test:
              print("Use shell for tests.")
              pass
-        if args.jump: cmd_jump(ser, args.addr)
+        if args.jump: cmd_jump(ser)
         
     else:
         # INTERACTIVE SHELL MODE
