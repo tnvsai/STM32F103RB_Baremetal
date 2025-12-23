@@ -3,15 +3,19 @@
 #include "flash.h"
 
 // Set to 0 for Production (Host Script), 1 for Manual Debug
-#define BL_DEBUG 0
+// Note: We are now using a prefix so we can leave logging ON.
+#define BL_DEBUG 1 
+
+#define LOG_PREFIX "[LOG] "
 
 // --- Commands ---
 #define BL_CMD_GET_HELP      0x50
 #define BL_CMD_GET_VER       0x51
-#define BL_CMD_GET_CID       0x52
+#define BL_CMD_GET_CID       0x53 
 #define BL_CMD_GO            0x55
 #define BL_CMD_ERASE_APP     0x56
 #define BL_CMD_WRITE_MEM     0x57
+#define BL_CMD_READ_MEM      0x59
 
 #define BL_VERSION           0x10
 
@@ -19,6 +23,12 @@
 void Bootloader_GPIO_Init(void);
 void Bootloader_JumpToUserApp(void);
 void Bootloader_ProcessCommand(uint8_t cmd);
+
+// Helper for consistent logging
+void UART_Log(USART_TypeDef *USARTx, const char *msg) {
+    UART_WriteString(USARTx, LOG_PREFIX);
+    UART_WriteString(USARTx, msg);
+}
 
 int main(void)
 {
@@ -35,39 +45,22 @@ int main(void)
     };
     UART_Init(USART2, &uart2_cfg);
 
+
     // 2. Check User Button (PC13)
     // PC13 is Active Low (Pressed = 0) on Nucleo
     if (GPIOC->IDR & (1 << 13)) {
         // Button NOT pressed (High) -> Jump to App
-#if BL_DEBUG
-        UART_WriteString(USART2, "Jumping to App...\r\n");
-#endif
+        // Button NOT pressed (High) -> Jump to App
+        UART_Log(USART2, "Jumping to App...\r\n");
         Bootloader_JumpToUserApp();
     }
-
-    // 3. Enter Bootloader Mode
-    // Enable GPIOA for LED (PA5) - only when in bootloader mode
-    RCC->APB2ENR |= RCC_APB2ENR_IOPAEN;
-    GPIOA->CRL &= ~(0xF << 20);
-    GPIOA->CRL |=  (0x2 << 20);
-    GPIOA->ODR |= (1 << 5); // Turn ON LED
     
-#if BL_DEBUG
-    UART_WriteString(USART2, "Bootloader Active v1.0\r\n");
-    UART_WriteString(USART2, "Waiting for commands...\r\n");
-#endif
+    UART_Log(USART2, "Bootloader Active v1.0\r\n");
+    UART_Log(USART2, "Waiting for commands...\r\n");
 
     while (1) {
-#if BL_DEBUG
-        // Echo received character for debugging
-        uint8_t cmd = (uint8_t)UART_ReadChar(USART2);
-        UART_WriteString(USART2, "Recv: 0x");
-        UART_WriteHex8(USART2, cmd);
-        UART_WriteString(USART2, "\r\n");
-#else
-        uint8_t cmd = (uint8_t)UART_ReadChar(USART2);
-#endif
 
+        uint8_t cmd = (uint8_t)UART_ReadChar(USART2);
         Bootloader_ProcessCommand(cmd);
     }
 }
@@ -85,6 +78,12 @@ void Bootloader_GPIO_Init(void) {
 
     // Set ODR to 1 for Pull-Up (assuming active low button)
     GPIOC->ODR |= (1 << 13);
+
+    // Enable GPIOA for LED (PA5) - only when in bootloader mode
+    RCC->APB2ENR |= RCC_APB2ENR_IOPAEN;
+    GPIOA->CRL &= ~(0xF << 20);
+    GPIOA->CRL |=  (0x2 << 20);
+    GPIOA->ODR |= (1 << 5); // Turn ON LED
 }
 
 void Bootloader_JumpToUserApp(void) {
@@ -110,9 +109,12 @@ void Bootloader_JumpToUserApp(void) {
         // 5. Jump
         app_reset_handler();
     } else {
-#if BL_DEBUG
-        UART_WriteString(USART2, "Invalid App MSP. Stay in BL.\r\n");
-#endif
+        UART_Log(USART2, "Invalid App MSP: 0x");
+        UART_WriteHex8(USART2, (msp_value >> 24) & 0xFF);
+        UART_WriteHex8(USART2, (msp_value >> 16) & 0xFF);
+        UART_WriteHex8(USART2, (msp_value >> 8) & 0xFF);
+        UART_WriteHex8(USART2, msp_value & 0xFF);
+        UART_WriteString(USART2, "\r\n");
     }
 }
 
@@ -122,61 +124,37 @@ void Bootloader_ProcessCommand(uint8_t cmd) {
     uint32_t addr;
     
     // Map ASCII to Commands for manual testing
-#if BL_DEBUG
+
     if (cmd == '1') cmd = BL_CMD_GET_VER;
     else if (cmd == '2') cmd = BL_CMD_GET_HELP;
-    else if (cmd == '3') cmd = BL_CMD_GET_CID;
     else if (cmd == '4') cmd = BL_CMD_GO;
     else if (cmd == '5') cmd = BL_CMD_ERASE_APP;
-#endif
+
 
     switch (cmd) {
         case BL_CMD_GET_VER:
-#if BL_DEBUG
-            UART_WriteString(USART2, "Ver: ");
-#endif
+          UART_Log(USART2, "CMD: Get Version\r\n");
             UART_WriteHex8(USART2, BL_VERSION);
-#if BL_DEBUG
-            UART_WriteString(USART2, "\r\n");
-#endif
+            // UART_WriteString(USART2, "\r\n"); // Removed to keep protocol clean
             break;
             
         case BL_CMD_GET_HELP:
-#if BL_DEBUG
-            UART_WriteString(USART2, "Help: 1=Ver, 2=Help, 3=CID, 4=Go, 5=Erase\r\n");
-#endif
-            break;
-        
-        case BL_CMD_GET_CID:
-#if BL_DEBUG
-            UART_WriteString(USART2, "CID: 0x0410\r\n");
-#else
-            UART_WriteChar(USART2, 0x10); 
-            UART_WriteChar(USART2, 0x04); 
-#endif
+            UART_Log(USART2, "Help: 1=Ver, 2=Help, 3=CID, 4=Go, 5=Erase\r\n");
             break;
             
         case BL_CMD_ERASE_APP:
-#if BL_DEBUG
-            UART_WriteString(USART2, "Erasing...");
-#endif
+            UART_Log(USART2, "Erasing...\r\n");
             if (Flash_EraseAppRegion() == FLASH_OK) {
-#if BL_DEBUG
-                UART_WriteString(USART2, "OK\r\n");
-#endif
+                UART_Log(USART2, "Result: OK\r\n");
                 UART_WriteChar(USART2, 0x06); // ACK
             } else {
-#if BL_DEBUG
-                UART_WriteString(USART2, "FAIL\r\n");
-#endif
+                UART_Log(USART2, "Result: FAIL\r\n");
                 UART_WriteChar(USART2, 0x15); // NACK
             }
             break;
             
         case BL_CMD_WRITE_MEM:
-#if BL_DEBUG
-            UART_WriteString(USART2, "WriteMem...\r\n");
-#endif
+            // UART_Log(USART2, "WriteMem...\r\n");
             // UNCOMMENT FOR NEW PROTOCOL V2
             UART_WriteChar(USART2, 0x06); // ACK CMD
             
@@ -223,15 +201,16 @@ void Bootloader_ProcessCommand(uint8_t cmd) {
             break;
             
         case BL_CMD_GO:
-#if BL_DEBUG
-            UART_WriteString(USART2, "Jump to Addr...\r\n");
-#endif
+            UART_Log(USART2, "Jump to Addr...\r\n");
             // Protocol: [ADDR 4B]
             UART_ReadBuffer(USART2, (uint8_t*)&addr, 4);
-            // Jump to address
-            {
-               void (*jump_func)(void) = (void*)addr;
-               jump_func();
+            
+            if (addr == FLASH_START_ADDRESS) {
+                 Bootloader_JumpToUserApp(); 
+            } else {
+                 // Jump to specific address (raw)
+                 void (*jump_func)(void) = (void*)addr;
+                 jump_func();
             }
             break;
 
@@ -242,10 +221,25 @@ void Bootloader_ProcessCommand(uint8_t cmd) {
             UART_WriteBuffer(USART2, buffer, 4);
             break;
             
+        case BL_CMD_READ_MEM:
+             UART_WriteChar(USART2, 0x06); // ACK CMD
+             
+             // Protocol: [ADDR 4B] -> ACK -> [LEN 1B] -> ACK -> [DATA]
+             UART_ReadBuffer(USART2, (uint8_t*)&addr, 4);
+             UART_WriteChar(USART2, 0x06); // ACK ADDR
+             
+             len = (uint8_t)UART_ReadChar(USART2);
+             UART_WriteChar(USART2, 0x06); // ACK LEN
+             
+             // Read from Memory and Send
+             for (uint8_t i = 0; i < len; i++) {
+                 uint8_t data = *((volatile uint8_t*)(addr + i));
+                 UART_WriteChar(USART2, data);
+             }
+             break;
+            
         default:
-#if BL_DEBUG
-            UART_WriteString(USART2, "Unknown Command\r\n");
-#endif
+            UART_Log(USART2, "Unknown Command\r\n");
             break;
     }
 }
