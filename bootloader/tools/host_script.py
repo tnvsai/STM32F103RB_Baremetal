@@ -25,9 +25,9 @@ ACK  = 0x06
 NACK = 0x15
 
 # Configuration Constants
-CHUNK_SIZE = 16
-BYTE_TX_DELAY = 0.005
-CHUNK_DELAY = 0.02
+CHUNK_SIZE = 64  # Maximum safe size (matches bootloader buffer)
+BYTE_TX_DELAY = 0.003
+CHUNK_DELAY = 0.01
 RETRY_COUNT = 3
 ERASE_TIMEOUT = 10
 WRITE_TIMEOUT = 2
@@ -40,7 +40,6 @@ APP_START = FLASH_START + BOOTLOADER_SIZE
 APP_END = FLASH_END
 
 def get_crc(data):
-    # If using CRC protocol later. Not used in simple implementation.
     return 0
 
 @contextmanager
@@ -77,44 +76,20 @@ def read_one_byte(ser):
         if not b: return b # Timeout
         
         if b == b'[':
-            # Potential Log start. Peek/Read cautiously.
-            # We expect 'LOG] ' (5 bytes)
-            # Read one by one to avoid blocking if it's not a log
-            potential_suffix = bytearray()
-            expected = b'LOG] '
+            potential_suffix = ser.read(5)
             
-            match = True
-            for i in range(5):
-                char = ser.read(1)
-                if not char:
-                    # Timeout during suffix read
-                    match = False
-                    break
-                potential_suffix.extend(char)
-                if char[0] != expected[i]:
-                    match = False
-                    break
-            
-            if match:
-                # Confirmed Log. Read line.
+            if potential_suffix == b'LOG] ':
                 line = ser.readline()
                 try:
                     msg = line.decode('utf-8', errors='ignore').strip()
-                    # Filter out empty or "Waiting..." noise if desrired, 
-                    # but for now print everything clearly
                     print(f"[LOG] {msg}") 
                 except:
                     print(f"[Raw Log] {line}")
-                continue # Loop to read next real byte
+                continue
             else:
-                # Not a log. Push back EVERYTHING to buffer.
-                # We consumed 'b' ([), and 'potential_suffix'
-                # But rx_buffer is FIFO. The 'b' ([) goes first!
-                # Since we are returning 'b' now, we only push suffix.
-                # WAIT. If we return 'b' now, next call gets suffix.
-                # Correct.
+                rx_buffer.extend(b)
                 rx_buffer.extend(potential_suffix)
-                return b
+                return bytes([rx_buffer.pop(0)])
         else:
             return b
 
@@ -131,7 +106,6 @@ def read_bytes(ser, n):
 def cmd_get_ver(ser):
     print("Sending GET_VER...")
     send_cmd(ser, CMD_GET_VER)
-    # Use read_bytes to filter logs
     ver = read_bytes(ser, 1)
     if len(ver) == 1:
         print(f"Bootloader Version: 0x{ver[0]:02X}")
@@ -141,14 +115,7 @@ def cmd_get_ver(ser):
 def cmd_get_help(ser):
     print("Sending GET_HELP...")
     send_cmd(ser, CMD_GET_HELP)
-    # Help is just logs now?
-    # No, help command in main.c sends logs only.
-    # Protocol says nothing returned for help if logs are swallowed.
-    # User might want to see help.
-    # Since all help text is [LOG], it will be printed by read_one_byte logic!
-    # We just wait a bit to catch them all.
-    time.sleep(0.5) 
-    # Provoke a read to flush logs
+    time.sleep(0.5)
     read_bytes(ser, 1) 
 
 def cmd_get_cid(ser):
@@ -165,10 +132,7 @@ def cmd_erase(ser):
     print("Erasing Application Region...")
     send_cmd(ser, CMD_ERASE_APP)
     
-    # Start timing
     start_time = time.time()
-    
-    # Wait for ACK (timeout extended for erase)
     with temp_timeout(ser, ERASE_TIMEOUT):
         resp = read_bytes(ser, 1)
     
@@ -190,7 +154,6 @@ def cmd_erase(ser):
 def cmd_read(ser, addr, length):
     global rx_buffer
     
-    # Validate address range
     try:
         validate_address(addr, length, "read")
     except ValueError as e:
@@ -199,7 +162,7 @@ def cmd_read(ser, addr, length):
     
     print(f"Reading {length} bytes from 0x{addr:08X}...")
     ser.reset_input_buffer()
-    rx_buffer = bytearray()  # CRITICAL: Clear global buffer
+    rx_buffer = bytearray()
     
     send_cmd(ser, CMD_READ_MEM)
     if read_bytes(ser, 1) != bytes([ACK]):
@@ -221,7 +184,6 @@ def cmd_read(ser, addr, length):
         return
         
     data = read_bytes(ser, length)
-    # Display in reverse order (big-endian/MSB-first) for readability
     print("Data: " + " ".join([f"{b:02X}" for b in reversed(data)]))
 
 # --- UI Helpers ---
@@ -242,22 +204,19 @@ def verify_flash_content(ser, addr, data_chunk):
     global rx_buffer
     try:
         ser.reset_input_buffer()
-        rx_buffer = bytearray()  # Clear global buffer
+        rx_buffer = bytearray()
         send_cmd(ser, CMD_READ_MEM)
         if read_bytes(ser, 1) != bytes([ACK]): return False
         
-        # Addr
         addr_bytes = struct.pack('<I', addr)
         for b in addr_bytes:
             ser.write(bytes([b]))
             time.sleep(BYTE_TX_DELAY)
         if read_bytes(ser, 1) != bytes([ACK]): return False
         
-        # Len
         ser.write(bytes([len(data_chunk)]))
         if read_bytes(ser, 1) != bytes([ACK]): return False
         
-        # Read Data
         read_data = read_bytes(ser, len(data_chunk))
         return read_data == data_chunk
         
@@ -274,15 +233,12 @@ def cmd_write(ser, filepath, start_address):
         print("File not found.")
         return False
 
-    # Pad data
     if len(data) % 2 != 0:
         data += b'\xFF'
 
     chunk_size = CHUNK_SIZE 
     total_len = len(data)
     total_written = 0
-    
-    # Start timing
     start_time = time.time()
     
     print(f"Writing {total_len} bytes to 0x{start_address:08X}...")
@@ -295,14 +251,11 @@ def cmd_write(ser, filepath, start_address):
         success = False
         for attempt in range(RETRY_COUNT):
             try:
-                # --- Chunk Write Logic ---
-                # 1. Command
                 ser.reset_input_buffer()
                 send_cmd(ser, CMD_WRITE_MEM)
                 if read_bytes(ser, 1) != bytes([ACK]):
                     print(f"\n[Retry {attempt+1}] No ACK for CMD at 0x{addr:08X}"); continue
 
-                # 2. Address
                 addr_bytes = struct.pack('<I', addr)
                 for b in addr_bytes:
                     ser.write(bytes([b]))
@@ -311,17 +264,14 @@ def cmd_write(ser, filepath, start_address):
                 if read_bytes(ser, 1) != bytes([ACK]):
                     print(f"\n[Retry {attempt+1}] No ACK for ADDR at 0x{addr:08X}"); continue
 
-                # 3. Length
                 ser.write(bytes([len(chunk)]))
                 if read_bytes(ser, 1) != bytes([ACK]):
                      print(f"\n[Retry {attempt+1}] No ACK for LEN at 0x{addr:08X}"); continue
                 
-                # 4. Data
                 for b in chunk:
                     ser.write(bytes([b]))
                     time.sleep(BYTE_TX_DELAY)
                 
-                # 5. Final ACK
                 with temp_timeout(ser, WRITE_TIMEOUT):
                     resp = read_bytes(ser, 1)
                 
@@ -334,13 +284,10 @@ def cmd_write(ser, filepath, start_address):
                      else:
                          print(f"\n[Retry {attempt+1}] Write err at 0x{addr:08X}. Resp: {resp}"); continue
                 
-                # If we got here, success
                 success = True
                 break
             except Exception as e:
                 print(f"\n[Retry {attempt+1}] Exception: {e}")
-                
-                # Check verification even on Exception
                 if verify_flash_content(ser, addr, chunk):
                      print(f"[Retry {attempt+1}] Verify OK! Exception recovered.")
                      success = True
@@ -354,8 +301,7 @@ def cmd_write(ser, filepath, start_address):
 
         total_written += len(chunk)
         print_progress_bar(total_written, total_len, prefix='Writing:', suffix='Complete', length=40)
-        
-        time.sleep(CHUNK_DELAY) # Inter-chunk delay
+        time.sleep(CHUNK_DELAY)
         
     elapsed_time = time.time() - start_time
     print(f"\nWrite Complete in {elapsed_time:.2f} seconds ({total_len/elapsed_time:.0f} bytes/sec)")
@@ -393,19 +339,13 @@ def cmd_monitor(ser):
     
     try:
         while True:
-            # Windows Keyboard Input
             if msvcrt:
                 if msvcrt.kbhit():
                     ch = msvcrt.getch()
-                    # special case for Ctrl+C (x03) usually handled by KeyboardInterrupt, 
-                    # but getch might catch it raw depending on console mode.
                     if ch == b'\x03': 
                         raise KeyboardInterrupt
                     ser.write(ch)
             else:
-                # Unix/Mac fallback (simplified, blocking line input for now)
-                # Proper non-blocking require termios/tty logic which is complex script-side.
-                # Assuming Windows user based on previous turns.
                 i = input()
                 ser.write(i.encode() + b'\n')
             
@@ -434,10 +374,9 @@ def run_shell(ser):
         cmd = parts[0].lower()
         args = parts[1:]
         
-        # Flush serial input before any command to remove old logs/junk
         global rx_buffer
         ser.reset_input_buffer()
-        rx_buffer = bytearray() # Clear global buffer
+        rx_buffer = bytearray()
         
         if cmd in ["exit", "quit"]:
             break
@@ -465,18 +404,14 @@ def run_shell(ser):
             
         elif cmd == "erase":
             cmd_erase(ser)
-            time.sleep(0.1) # Controller settle
+            time.sleep(0.1)
             
         elif cmd == "flash":
             if not args:
                 print("Usage: flash <filename>")
                 continue
             
-            # Start overall timing
             flash_start = time.time()
-            
-            # Auto-Erase before flash
-            # We must erase because STM32 flash can only be written if 0xFFFF
             if not cmd_erase(ser):
                 print("Aborting Flash: Erase Failed.")
                 continue
@@ -492,7 +427,6 @@ def run_shell(ser):
                 time.sleep(0.5)
                 cmd_jump(ser)
                 
-                # Auto-switch to monitor
                 print("Switching to Monitor Mode...")
                 time.sleep(0.5)
                 cmd_monitor(ser)
@@ -518,7 +452,6 @@ def main():
     parser.add_argument("port", help="Serial Port (e.g. COM3 or /dev/ttyUSB0)")
     parser.add_argument("--baud", type=int, default=115200, help="Baud rate")
     
-    # Optional flags for script mode
     parser.add_argument("--ver", action="store_true", help="Get Version")
     parser.add_argument("--cid", action="store_true", help="Get Chip ID")
     parser.add_argument("--erase", action="store_true", help="Erase Application")
@@ -536,14 +469,11 @@ def main():
         print(f"Error opening port: {e}")
         return
     
-    # Flush junk
     ser.read_all()
     
-    # Check if any action flags were provided
     actions = [args.ver, args.cid, args.erase, args.test_sig, args.echo_test, args.write, args.jump]
     
     if any(actions):
-        # SCRIPT MODE (Old behavior)
         if args.ver: cmd_get_ver(ser)
         if args.cid: cmd_get_cid(ser)
         if args.erase: 
@@ -555,11 +485,9 @@ def main():
         if args.write: cmd_write(ser, args.write, args.addr)
         if args.echo_test:
              print("Use shell for tests.")
-             pass
         if args.jump: cmd_jump(ser)
         
     else:
-        # INTERACTIVE SHELL MODE
         run_shell(ser)
 
     ser.close()
