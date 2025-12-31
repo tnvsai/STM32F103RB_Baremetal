@@ -181,10 +181,15 @@ void SystemInit (void)
   #endif /* DATA_IN_ExtSRAM */
 #endif 
 
-  /* Configure the Vector Table location -------------------------------------*/
-#if defined(USER_VECT_TAB_ADDRESS)
-  SCB->VTOR = VECT_TAB_BASE_ADDRESS | VECT_TAB_OFFSET; /* Vector Table Relocation in Internal SRAM. */
-#endif /* USER_VECT_TAB_ADDRESS */
+  /* Configure the Vector Table location */
+#if defined(BOOTLOADER)
+    SCB->VTOR = BOOTLOADER_START;   // usually 0x08000000
+#elif defined(APPLICATION)
+    SCB->VTOR = APPLICATION_START;  // e.g., 0x08004000
+#else
+    SCB->VTOR = FLASH_BASE;         // default
+#endif
+
 }
 
 /**

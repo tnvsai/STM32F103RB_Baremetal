@@ -113,10 +113,10 @@ void IRQ(void) { \
     } \
 }
 
-// TIMER_IRQ_HANDLER(TIM1_UP_IRQHandler, TIMER1)
-// TIMER_IRQ_HANDLER(TIM2_IRQHandler,   TIMER2)
-// TIMER_IRQ_HANDLER(TIM3_IRQHandler,   TIMER3)
-// TIMER_IRQ_HANDLER(TIM4_IRQHandler,   TIMER4)
+TIMER_IRQ_HANDLER(TIM1_UP_IRQHandler, TIMER1)
+TIMER_IRQ_HANDLER(TIM2_IRQHandler,   TIMER2)
+TIMER_IRQ_HANDLER(TIM3_IRQHandler,   TIMER3)
+TIMER_IRQ_HANDLER(TIM4_IRQHandler,   TIMER4)
 
 // ---------------- PWM Init ----------------
 void TIMER_InitPWM(Timer_Id_t timer, uint8_t channel, uint16_t prescaler, uint16_t arr) {
@@ -248,16 +248,16 @@ void TIMER_InitInputCapture(Timer_Id_t timer, uint8_t channel, uint16_t prescale
 }
 
 // Extend existing IRQ handlers for input capture
-#define TIMER_IC_IRQ_HANDLER(IRQ, ID) \
-void IRQ(void) { \
-    TIM_TypeDef *TIMx = TIMER_GetBase(ID); \
-    if ((TIMx->SR & TIM_SR_CC1IF) && ic_callbacks[ID]) { \
-        TIMx->SR &= ~TIM_SR_CC1IF; \
-        ic_callbacks[ID](); \
-    } \
-}
+// #define TIMER_IC_IRQ_HANDLER(IRQ, ID) \
+// void IRQ(void) { \
+//     TIM_TypeDef *TIMx = TIMER_GetBase(ID); \
+//     if ((TIMx->SR & TIM_SR_CC1IF) && ic_callbacks[ID]) { \
+//         TIMx->SR &= ~TIM_SR_CC1IF; \
+//         ic_callbacks[ID](); \
+//     } \
+// }
 
-TIMER_IC_IRQ_HANDLER(TIM1_UP_IRQHandler, TIMER1)
-TIMER_IC_IRQ_HANDLER(TIM2_IRQHandler,   TIMER2)
-TIMER_IC_IRQ_HANDLER(TIM3_IRQHandler,   TIMER3)
-TIMER_IC_IRQ_HANDLER(TIM4_IRQHandler,   TIMER4)
+// TIMER_IC_IRQ_HANDLER(TIM1_UP_IRQHandler, TIMER1)
+// TIMER_IC_IRQ_HANDLER(TIM2_IRQHandler,   TIMER2)
+// TIMER_IC_IRQ_HANDLER(TIM3_IRQHandler,   TIMER3)
+// TIMER_IC_IRQ_HANDLER(TIM4_IRQHandler,   TIMER4)
