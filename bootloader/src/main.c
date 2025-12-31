@@ -2,12 +2,16 @@
 #include "uart.h"
 #include "crc.h"
 #include "flash.h"
-#include <stddef.h> // For NULL
+#include "crypto_wrapper.h"
+#include "public_key.h"
 
-// Set to 0 for production (disables all logs for faster performance)
-#define BL_DEBUG 1
+#define NULL    (void*)0
+#define TRUE    (1)
+#define FALSE   (0)
 
-#if BL_DEBUG
+#define BL_LOG_ENABLE     TRUE
+
+#if BL_LOG_ENABLE
 #define LOG_PREFIX "[LOG] "
     #define UART_Log(usart, msg) do { \
         UART_WriteString(usart, LOG_PREFIX); \
@@ -23,11 +27,18 @@
 #define BL_CMD_WRITE_MEM     0x57
 #define BL_CMD_READ_MEM      0x59
 
-// CRC Footer Structure (placed immediately after application code)
-#define CRC_FOOTER_MAGIC 0xDEADBEEF
-#define FOOTER_SIZE 16            // 4 x uint32_t
-#define APP_REGION_END 0x08020000 // End of 128KB flash
-#define APP_START 0x08004000      // Start of app region
+// Memory regions
+#define APP_REGION_END      0x08020000 // End of 128KB flash
+#define APP_START           0x08008000      // Start of app region (after 32KB bootloader)
+
+// CRC Footer Structure (legacy support)
+#define CRC_FOOTER_MAGIC    0xDEADBEEF
+#define CRC_FOOTER_SIZE     16
+
+// Signature Footer Structure (secure boot)
+#define SIGNATURE_FOOTER_MAGIC 0xBEEFC0DE
+#define SIGNATURE_FOOTER_SIZE  76 
+
 
 typedef struct {
   uint32_t size;    // Application code size in bytes
@@ -36,9 +47,18 @@ typedef struct {
   uint32_t magic;   // 0xDEADBEEF
 } __attribute__((packed)) CRC_Footer_t;
 
+typedef struct {
+  uint32_t firmware_size;    // Size of firmware in bytes (excluding footer)
+  uint32_t version;          // Firmware version number
+  uint8_t  signature[64];    // ECDSA signature (R=32, S=32)
+  uint32_t magic;            // 0xBEEFC0DE
+} __attribute__((packed)) SignatureFooter_t;  // Total: 76 bytes
+
+
 void Bootloader_GPIO_Init(void);
 void Bootloader_JumpToUserApp(void);
-CRC_Footer_t *Bootloader_FindFooter(void);
+CRC_Footer_t *Bootloader_FindCrcFooter(void);
+SignatureFooter_t *Bootloader_FindSignatureFooter(void);
 void Bootloader_ProcessCommand(uint8_t cmd);
 
 int main(void) 
@@ -102,15 +122,15 @@ void Bootloader_GPIO_Init(void) {
  * 2. Check if magic number exists at current address + 12 bytes
  * 3. If found, return pointer to footer structure
  * 4. If not found, move back 4 bytes and repeat
- * 5. Stop when we reach app start (0x08004000)
+ * 5. Stop when we reach app start (0x08008000)
  * 
- * Worst case: ~28,000 checks (112KB / 4 bytes) = ~1-2ms at 72MHz
+ * Worst case: ~24,000 checks (96KB / 4 bytes) = ~1-2ms at 72MHz
  * 
  * @return Pointer to footer if found, NULL if not found
  */
-CRC_Footer_t *Bootloader_FindFooter(void) {
+CRC_Footer_t *Bootloader_FindCrcFooter(void) {
   // Start from end of app region and scan backward
-  for (uint32_t addr = APP_REGION_END - FOOTER_SIZE; addr >= APP_START;
+  for (uint32_t addr = APP_REGION_END - CRC_FOOTER_SIZE; addr >= APP_START;
        addr -= 4) {
     
     // Check magic number at offset +12 (4th field in footer structure)
@@ -129,87 +149,127 @@ CRC_Footer_t *Bootloader_FindFooter(void) {
 }
 
 /**
+ * Scan flash memory to locate the signature footer
+ * 
+ * Similar to CRC footer scan, but looking for 0xBEEFC0DE magic number.
+ * The signature footer is larger (108 bytes) and placed after the firmware.
+ * 
+ * @return Pointer to signature footer if found, NULL if not found
+ */
+SignatureFooter_t *Bootloader_FindSignatureFooter(void) {
+  // Start from end of app region and scan backward
+  for (uint32_t addr = APP_REGION_END - SIGNATURE_FOOTER_SIZE; addr >= APP_START; addr -= 4) 
+  { 
+    // Check magic number at offset +72 (last field: firmware_size(4) + version(4) + sig(64) + magic(4))
+    uint32_t magic = *((volatile uint32_t *)(addr + 72));
+    
+    if (magic == SIGNATURE_FOOTER_MAGIC) {
+      // Found valid signature footer!
+      return (SignatureFooter_t *)addr;
+    }
+  }
+  
+  // Signature footer not found
+  return NULL;
+}
+
+/**
  * Verify application firmware and jump to it if valid
  * 
- * Process:
+ * SECURE BOOT PROCESS:
  * 1. Validate application has valid stack pointer (in RAM)
- * 2. Search for CRC footer in flash memory
- * 3. If footer found:
- *    a. Calculate CRC-32 of application code
- *    b. Compare with stored CRC in footer
- *    c. Jump to app if match, stay in bootloader if mismatch
- * 4. If no footer found (old firmware), skip CRC and jump anyway
+ * 2. Search for signature footer in flash memory
+ * 3. If signature found:
+ *    a. Calculate SHA-256 hash of firmware
+ *    b. Verify ECDSA signature using embedded public key
+ *    c. Jump to app if signature valid, refuse boot if invalid
+ * 4. Fallback to CRC verification for backward compatibility
  * 
- * Note: CRC verification happens on EVERY reset when button not pressed.
- * This protects against flash corruption, cosmic rays, or tampering.
+ * Note: Signature verification provides cryptographic authentication.
+ * Only firmware signed with the corresponding private key will boot.
  */
 void Bootloader_JumpToUserApp(void) {
-  uint32_t app_addr = FLASH_START_ADDRESS;
+  uint32_t app_addr = APP_START;
 
   // Step 1: Read application's initial stack pointer (first word of vector table)
   uint32_t msp_value = *((volatile uint32_t *)app_addr);
 
   // Step 2: Validate MSP is in valid RAM range (0x20000000-0x20005000)
-  if ((msp_value & 0x2FF00000) == 0x20000000) {
-    
-    // Step 3: Search for CRC footer by scanning flash memory
-    CRC_Footer_t *footer = Bootloader_FindFooter();
+  if ((msp_value & 0x2FF00000) != 0x20000000) {
+    UART_Log(USART2, "Invalid MSP - BOOT DENIED\r\n");
+    return;
+  }
 
-    if (footer != NULL) {
-      // Footer found! Perform CRC verification
+  // Step 3: Search for secure boot signature footer
+  SignatureFooter_t *sig_footer = Bootloader_FindSignatureFooter();
+
+  if (sig_footer != NULL) {
+    // ==============================================
+    // SECURE BOOT: Signature Verification
+    // ==============================================
+    UART_Log(USART2, "Signature found. Verifying...\r\n");
+
+    // Step 3a: Calculate SHA-256 hash of firmware
+    uint8_t calculated_hash[32];
+    Crypto_SHA256((uint8_t *)app_addr, sig_footer->firmware_size, calculated_hash);
+
+    // Step 3b: Verify ECDSA signature
+    extern const uint8_t PUBLIC_KEY[64];
+    
+    int signature_valid = Crypto_VerifySignature(
+        calculated_hash, 32,
+        sig_footer->signature,
+        PUBLIC_KEY
+    );
+
+    if (signature_valid) {
+      // Signature is VALID - firmware authenticated!
+      UART_Log(USART2, "Signature VALID - Booting...\r\n");
+
+      // Set stack pointer and jump to application
+      __set_MSP(msp_value);
+      uint32_t reset_handler_addr = *((volatile uint32_t *)(app_addr + 4));
+      void (*app_reset_handler)(void) = (void *)reset_handler_addr;
+      app_reset_handler(); // Jump! (never returns)
+      
+    } else {
+      // Signature is INVALID - firmware tampered or not signed properly
+      UART_Log(USART2, "Signature INVALID - BOOT DENIED\r\n");
+      return; // Refuse to boot
+    }
+
+  } else {
+    // ==============================================
+    // FALLBACK: CRC Verification (Legacy Support)
+    // ==============================================
+    UART_Log(USART2, "No signature. Trying CRC...\r\n");
+    
+    CRC_Footer_t *crc_footer = Bootloader_FindFooter();
+
+    if (crc_footer != NULL) {
+      // Legacy CRC verification
       UART_Log(USART2, "CRC footer found. Verifying...\r\n");
 
-      // Step 4: Calculate CRC-32 of application code
-      // Uses size from footer (ignores 0xFF padding after code)
       uint8_t *app_code = (uint8_t *)app_addr;
-      uint32_t calculated_crc = CRC_CalculateBytes(app_code, footer->size);
+      uint32_t calculated_crc = CRC_CalculateBytes(app_code, crc_footer->size);
 
-      // Step 5: Compare calculated CRC with stored CRC
-      if (calculated_crc == footer->crc32) {
-        // CRC match - firmware is valid!
-        UART_Log(USART2, "CRC OK!\r\n");
+      if (calculated_crc == crc_footer->crc32) {
+        UART_Log(USART2, "CRC OK - Booting (legacy)...\r\n");
       } else {
-        // CRC mismatch - firmware is corrupted!
-        UART_Log(USART2, "CRC FAIL! Firmware corrupted.\r\n");
-        
-        // Display expected vs calculated CRC for debugging
-        UART_WriteString(USART2, "Expected: 0x");
-        UART_WriteHex8(USART2, (footer->crc32 >> 24) & 0xFF);
-        UART_WriteHex8(USART2, (footer->crc32 >> 16) & 0xFF);
-        UART_WriteHex8(USART2, (footer->crc32 >> 8) & 0xFF);
-        UART_WriteHex8(USART2, footer->crc32 & 0xFF);
-        UART_WriteString(USART2, "\r\nCalculated: 0x");
-        UART_WriteHex8(USART2, (calculated_crc >> 24) & 0xFF);
-        UART_WriteHex8(USART2, (calculated_crc >> 16) & 0xFF);
-        UART_WriteHex8(USART2, (calculated_crc >> 8) & 0xFF);
-        UART_WriteHex8(USART2, calculated_crc & 0xFF);
-        UART_WriteString(USART2, "\r\n");
-        
-        // DO NOT BOOT corrupted firmware - stay in bootloader
+        UART_Log(USART2, "CRC FAIL - BOOT DENIED\r\n");
         return;
       }
     } else {
-      // No footer found - probably old firmware without CRC
-      // Skip verification and boot anyway (backward compatibility)
-      UART_Log(USART2, "No CRC footer (old firmware). Skipping check.\r\n");
+      // No signature AND no CRC footer - REFUSE TO BOOT (fail-closed)
+      UART_Log(USART2, "No footer - BOOT DENIED\r\n");
+      return;
     }
 
-    // Set stack pointer to application's value
+    // CRC passed - boot the app
     __set_MSP(msp_value);
-
-    // Read application's reset handler address (second word of vector table)
     uint32_t reset_handler_addr = *((volatile uint32_t *)(app_addr + 4));
     void (*app_reset_handler)(void) = (void *)reset_handler_addr;
-
-    // Jump to application! (never returns)
-    app_reset_handler();
-  } else {
-    UART_Log(USART2, "Invalid App MSP: 0x");
-    UART_WriteHex8(USART2, (msp_value >> 24) & 0xFF);
-    UART_WriteHex8(USART2, (msp_value >> 16) & 0xFF);
-    UART_WriteHex8(USART2, (msp_value >> 8) & 0xFF);
-    UART_WriteHex8(USART2, msp_value & 0xFF);
-    UART_WriteString(USART2, "\r\n");
+    app_reset_handler(); // Jump! (never returns)
   }
 }
 

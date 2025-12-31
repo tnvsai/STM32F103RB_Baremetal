@@ -15,3 +15,9 @@
 # Ignore OS-specific junk
 .DS_Store
 Thumbs.db
+
+# Secure Boot Keys - DO NOT COMMIT PRIVATE KEYS
+keys/private_key.pem
+keys/*.key
+!keys/public_key.h
+!keys/public_key.pem

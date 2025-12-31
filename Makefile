@@ -16,8 +16,8 @@ ifeq ($(TARGET), bootloader)
     BUILD_DIR          = build/bootloader
 else
     PROJECT = app
-    TARGET_DEFINES = -DAPPLICATION -DAPPLICATION_START=0x08004000
-    FLASH_START_ADDRESS = 0x08004000
+    TARGET_DEFINES = -DAPPLICATION -DAPPLICATION_START=0x08008000
+    FLASH_START_ADDRESS = 0x08008000
     TARGET_SRC_DIR     = application/src
     TARGET_INC_DIR     = application/include
     TARGET_LINKER_FILE = application/linker/STM32F103RBTX_APP.ld
@@ -44,6 +44,7 @@ OPENOCD = "C:/Program Files/xpack-openocd-0.12.0-6/bin/openocd.exe"
 
 CFLAGS = -mcpu=cortex-m3 -mthumb -O0 -g3 -Wall -ffreestanding -fno-builtin \
          -DSTM32F103xB -I$(TARGET_INC_DIR) -I$(COMMON_INC_DIR) \
+         -Icommon/crypto/micro-ecc/include -Icommon/crypto/micro-ecc/asm -Ikeys \
          $(TARGET_DEFINES)
 
 LDFLAGS = -T$(TARGET_LINKER_FILE) -lc -lgcc -Wl,--gc-sections
@@ -57,7 +58,8 @@ rwildcard=$(foreach d,$(wildcard $1*),$(call rwildcard,$d/,$2) $(filter $(subst 
 
 # Collect sources
 C_SOURCES := $(call rwildcard,$(TARGET_SRC_DIR),*.c) \
-             $(call rwildcard,$(COMMON_SRC_DIR),*.c)
+             $(call rwildcard,$(COMMON_SRC_DIR),*.c) \
+             common/crypto/micro-ecc/src/uECC.c
 
 # Explicitly include startup file
 STARTUP_FILE := $(TARGET_SRC_DIR)/startup_stm32f103rbtx.s
@@ -129,8 +131,8 @@ $(BUILD_DIR)/$(PROJECT).bin: $(BUILD_DIR)/$(PROJECT).elf
 	@echo [BIN] $@
 	@$(OBJCOPY) -O binary $< $@
 ifeq ($(TARGET), application)
-	@echo [CRC] Injecting CRC footer...
-	@python scripts/inject_crc.py $@
+	@echo [SIGN] Signing firmware with ECDSA...
+	@python scripts/sign_firmware.py $@
 endif
 
 $(BUILD_DIR)/$(PROJECT).hex: $(BUILD_DIR)/$(PROJECT).elf
@@ -182,12 +184,12 @@ flash-bl: bl
 
 flash-app: app
 	@echo [FLASH] Programming Application...
-	@STM32_Programmer_CLI -c port=SWD -d build/application/app.bin 0x08004000 -rst
+	@STM32_Programmer_CLI -c port=SWD -d build/application/app.bin 0x08008000 -rst
 
 flash-both: both
 	@echo [FLASH] Programming Bootloader + Application...
 	@STM32_Programmer_CLI -c port=SWD -d build/bootloader/bootloader.bin 0x08000000
-	@STM32_Programmer_CLI -c port=SWD -d build/application/app.bin 0x08004000 -rst
+	@STM32_Programmer_CLI -c port=SWD -d build/application/app.bin 0x08008000 -rst
 
 # Size report
 size:
@@ -222,4 +224,18 @@ endif
 # 📘 Phony Targets
 ################################################################################
 
-.PHONY: all clean flash debug erase bl app both flash-bl flash-app flash-both size
+.PHONY: all clean flash debug erase bl app both flash-bl flash-app flash-both size genkeys sign
+
+################################################################################
+# 🔑 Secure Boot: Key Generation and Signing
+################################################################################
+
+# Generate ECDSA key pair for secure boot
+genkeys:
+	@echo [KEYS] Generating ECDSA secp256r1 key pair...
+	@python scripts/generate_keys.py
+
+# Sign application firmware (manual trigger if not auto-signed during build)
+sign:
+	@echo [SIGN] Signing application firmware...
+	@python scripts/sign_firmware.py build/application/app.bin
