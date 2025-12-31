@@ -9,7 +9,7 @@ _Min_Stack_Size = 0x400; /* 1 KB stack */
 MEMORY
 {
   RAM   (xrw) : ORIGIN = 0x20000000, LENGTH = 20K
-  FLASH (rx)  : ORIGIN = 0x08000000, LENGTH = 16K  /* Bootloader size 16KB */
+  FLASH (rx)  : ORIGIN = 0x08000000, LENGTH = 32K  /* Bootloader size 32KB (expanded for crypto) */
 }
 
 /* Sections */

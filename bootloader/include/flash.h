@@ -7,8 +7,8 @@
 /* Flash page size for STM32F103RB */
 #define FLASH_PAGE_SIZE      1024U
 
-/* Application region */
-#define FLASH_START_ADDRESS  0x08004000U
+/* Application region (after 32KB bootloader) */
+#define FLASH_START_ADDRESS  0x08008000U
 #define FLASH_END_ADDRESS    0x0801FFFFU
 
 /* Flash status */
