@@ -5,6 +5,10 @@
 # Target selection: bootloader or application
 TARGET ?= application
 
+# Footer type (default: sec)
+# Set via: make app sec | make app crc | make app none
+FOOTER ?= sec
+
 # Directories based on target
 ifeq ($(TARGET), bootloader)
     PROJECT = bootloader
@@ -131,8 +135,18 @@ $(BUILD_DIR)/$(PROJECT).bin: $(BUILD_DIR)/$(PROJECT).elf
 	@echo [BIN] $@
 	@$(OBJCOPY) -O binary $< $@
 ifeq ($(TARGET), application)
+ifeq ($(FOOTER), sec)
 	@echo [SIGN] Signing firmware with ECDSA...
 	@python scripts/sign_firmware.py $@
+else ifeq ($(FOOTER), crc)
+	@echo [CRC] Adding CRC footer...
+	@python scripts/add_crc_footer.py $@
+else ifeq ($(FOOTER), none)
+	@echo [INFO] No footer added (raw binary)
+else
+	@echo [SIGN] Signing firmware with ECDSA (default)...
+	@python scripts/sign_firmware.py $@
+endif
 endif
 
 $(BUILD_DIR)/$(PROJECT).hex: $(BUILD_DIR)/$(PROJECT).elf
@@ -224,7 +238,17 @@ endif
 # 📘 Phony Targets
 ################################################################################
 
-.PHONY: all clean flash debug erase bl app both flash-bl flash-app flash-both size genkeys sign
+.PHONY: all clean flash debug erase bl app both flash-bl flash-app flash-both size genkeys sign sec crc none
+
+# Footer type targets - set FOOTER and build application
+sec:
+	@$(MAKE) app FOOTER=sec
+
+crc:
+	@$(MAKE) app FOOTER=crc
+
+none:
+	@$(MAKE) app FOOTER=none
 
 ################################################################################
 # 🔑 Secure Boot: Key Generation and Signing
