@@ -153,6 +153,9 @@ void mini_printf(const char *fmt, ...) {
     va_end(args);
 }
 
+// Display-specific printf function (only available when display driver is enabled)
+#ifdef USE_DISPLAY_DRIVER
+
 // Convert signed integer to string
 static void i32_to_str(int32_t val, char *buf) {
     if(val < 0) {
@@ -238,4 +241,6 @@ void ST7789_mini_printf(uint16_t x, uint16_t y, uint16_t color, uint16_t bg, uin
 
     va_end(args);
 }
+
+#endif // USE_DISPLAY_DRIVER
 

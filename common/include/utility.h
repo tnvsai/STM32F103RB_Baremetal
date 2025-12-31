@@ -5,7 +5,11 @@
 #include "uart.h"
 #include <stdarg.h>
 #include <stdint.h>
+
+// Display driver only available in application, not bootloader
+#ifdef USE_DISPLAY_DRIVER
 #include "display_st7789.h"
+#endif
 
 
 // Temporary buffer size for number/string conversion
@@ -17,6 +21,9 @@ void LED_On(void);
 void LED_Off(void);
 void LED_Toggle(void);
 void mini_printf(const char *fmt, ...);
+
+#ifdef USE_DISPLAY_DRIVER
 void ST7789_mini_printf(uint16_t x, uint16_t y, uint16_t color, uint16_t bg, uint8_t scale, const char *fmt, ...);
+#endif
 
 #endif // _UTILITY_H
