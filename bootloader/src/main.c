@@ -244,7 +244,7 @@ void Bootloader_JumpToUserApp(void) {
     // ==============================================
     UART_Log(USART2, "No signature. Trying CRC...\r\n");
     
-    CRC_Footer_t *crc_footer = Bootloader_FindFooter();
+    CRC_Footer_t *crc_footer = Bootloader_FindCrcFooter();
 
     if (crc_footer != NULL) {
       // Legacy CRC verification
