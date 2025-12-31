@@ -7,7 +7,7 @@
             "request": "launch",
             "servertype": "openocd",
             "cwd": "${workspaceFolder}",
-            "executable": "${workspaceFolder}/build/bootloader/main.elf",
+            "executable": "${workspaceFolder}/build/bootloader/bootloader.elf",
             "device": "STM32F103RB",
             "configFiles": [
                 "interface/stlink.cfg",
@@ -23,7 +23,7 @@
             "request": "launch",
             "servertype": "openocd",
             "cwd": "${workspaceFolder}",
-            "executable": "${workspaceFolder}/build/application/main.elf",
+            "executable": "${workspaceFolder}/build/application/app.elf",
             "device": "STM32F103RB",
             "configFiles": [
                 "interface/stlink.cfg",

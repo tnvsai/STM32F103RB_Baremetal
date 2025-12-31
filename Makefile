@@ -128,6 +128,10 @@ $(BUILD_DIR)/$(PROJECT).elf: $(OBJECTS)
 $(BUILD_DIR)/$(PROJECT).bin: $(BUILD_DIR)/$(PROJECT).elf
 	@echo [BIN] $@
 	@$(OBJCOPY) -O binary $< $@
+ifeq ($(TARGET), application)
+	@echo [CRC] Injecting CRC footer...
+	@python scripts/inject_crc.py $@
+endif
 
 $(BUILD_DIR)/$(PROJECT).hex: $(BUILD_DIR)/$(PROJECT).elf
 	@echo [HEX] $@
@@ -197,6 +201,10 @@ size:
 		echo Application: & $(SIZE) build/application/app.elf\
 	)
 	@echo "==================================="
+
+# Run Host
+runhost:
+	@python scripts/host_script.py COM4
 
 ################################################################################
 # 🧹 Cleaning
