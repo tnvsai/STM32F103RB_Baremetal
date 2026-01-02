@@ -13,7 +13,7 @@ void LED1_Callback(void) {
 int main(void) {
     // UART2 configuration
     UART_Config_t uart2_cfg = {
-        .baudRate   = 115200,
+        .baudRate   = 230400,
         .wordLength = UART_WORDLENGTH_8B,
         .stopBits   = UART_STOPBITS_1,
         .parity     = UART_PARITY_NONE,

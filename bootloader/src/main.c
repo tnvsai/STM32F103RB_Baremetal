@@ -72,7 +72,7 @@ int main(void)
   CRC_Init();
 
   // Configure UART for communication with host PC
-  UART_Config_t uart2_cfg = {.baudRate = 115200,
+  UART_Config_t uart2_cfg = {.baudRate = 230400,
                              .wordLength = UART_WORDLENGTH_8B,
                              .stopBits = UART_STOPBITS_1,
                              .parity = UART_PARITY_NONE,
@@ -275,7 +275,7 @@ void Bootloader_JumpToUserApp(void) {
 
 void Bootloader_ProcessCommand(uint8_t cmd) {
   uint8_t len;
-  uint8_t buffer[64];
+  uint8_t buffer[128];
   uint32_t addr;
 
   switch (cmd) {
@@ -299,8 +299,8 @@ void Bootloader_ProcessCommand(uint8_t cmd) {
     len = (uint8_t)UART_ReadChar(USART2);
     UART_WriteChar(USART2, 0x06);
 
-    if (len > 64)
-      len = 64;
+    if (len > 128)
+      len = 128;
 
     UART_ReadBuffer(USART2, buffer, len);
 
@@ -332,7 +332,7 @@ void Bootloader_ProcessCommand(uint8_t cmd) {
       }
 
       // Small delay for flash controller stability
-      for (volatile int d = 0; d < 1000; d++)
+      for (volatile int d = 0; d < 20; d++)
         ;
     }
 
