@@ -85,7 +85,7 @@ void mini_printf(const char *fmt, ...) {
     static uint8_t uart_initialized = 0;
     if (!uart_initialized) {
         UART_Config_t uart2_cfg = {
-            .baudRate   = 115200,
+            .baudRate   = 230400,
             .wordLength = UART_WORDLENGTH_8B,
             .stopBits   = UART_STOPBITS_1,
             .parity     = UART_PARITY_NONE,

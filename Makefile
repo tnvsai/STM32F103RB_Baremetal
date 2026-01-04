@@ -53,6 +53,9 @@ CFLAGS = -mcpu=cortex-m3 -mthumb -O0 -g3 -Wall -ffreestanding -fno-builtin \
 
 LDFLAGS = -T$(TARGET_LINKER_FILE) -lc -lgcc -Wl,--gc-sections
 
+# Generate .map file
+LDFLAGS += -Wl,-Map=$(BUILD_DIR)/$(PROJECT).map
+
 ################################################################################
 # 📂 Source and Object Files
 ################################################################################

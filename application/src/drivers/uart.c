@@ -91,6 +91,13 @@ void UART_Init(USART_TypeDef *USARTx, UART_Config_t *config) {
     if (config->enableTx) USARTx->CR1 |= (1 << 3);
     if (config->enableRx) USARTx->CR1 |= (1 << 2);
 
+    // enable Rx interupt 
+    if(config->rxInterrupt)
+    {
+        USARTx->CR1 |=(1<<5); 
+        NVIC_EnableIRQ(USART2_IRQn);
+        NVIC_SetPriority(USART2_IRQn, config->interruptPriority);
+    }
     // 8. Enable USART
     USARTx->CR1 |= (1 << 13);
 }

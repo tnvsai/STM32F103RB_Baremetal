@@ -26,6 +26,8 @@ typedef struct {
     UART_Parity_t parity;
     uint8_t enableTx;
     uint8_t enableRx;
+    uint8_t rxInterrupt;
+    uint8_t interruptPriority;
 } UART_Config_t;
 
 void UART_Init(USART_TypeDef *USARTx, UART_Config_t *config);
