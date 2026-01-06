@@ -31,6 +31,7 @@ endif
 # Common code
 COMMON_SRC_DIR = common/src
 COMMON_INC_DIR = common/include
+COMMON_UART_DIR = common/uart
 
 ################################################################################
 # 🧠 Toolchain
@@ -47,11 +48,14 @@ OPENOCD = "C:/Program Files/xpack-openocd-0.12.0-6/bin/openocd.exe"
 ################################################################################
 
 CFLAGS = -mcpu=cortex-m3 -mthumb -O0 -g3 -Wall -ffreestanding -fno-builtin \
-         -DSTM32F103xB -I$(TARGET_INC_DIR) -I$(COMMON_INC_DIR) \
+         -DSTM32F103xB -I$(TARGET_INC_DIR) -I$(COMMON_INC_DIR) -I$(COMMON_UART_DIR) \
          -Icommon/crypto/micro-ecc/include -Icommon/crypto/micro-ecc/asm -Ikeys \
          $(TARGET_DEFINES)
 
 LDFLAGS = -T$(TARGET_LINKER_FILE) -lc -lgcc -Wl,--gc-sections
+
+# Generate .map file
+LDFLAGS += -Wl,-Map=$(BUILD_DIR)/$(PROJECT).map
 
 ################################################################################
 # 📂 Source and Object Files
@@ -63,6 +67,7 @@ rwildcard=$(foreach d,$(wildcard $1*),$(call rwildcard,$d/,$2) $(filter $(subst 
 # Collect sources
 C_SOURCES := $(call rwildcard,$(TARGET_SRC_DIR),*.c) \
              $(call rwildcard,$(COMMON_SRC_DIR),*.c) \
+             $(call rwildcard,$(COMMON_UART_DIR),*.c) \
              common/crypto/micro-ecc/src/uECC.c
 
 # Explicitly include startup file
@@ -235,10 +240,60 @@ endif
 	@echo [CLEAN] Removed entire build directory.
 
 ################################################################################
+# 📘 Help Target
+################################################################################
+
+.PHONY: help
+help:
+	@echo ========================================================================
+	@echo   STM32F103RB Baremetal Project - Available Targets
+	@echo ========================================================================
+	@echo.
+	@echo BUILD TARGETS:
+	@echo   make bl              - Build bootloader only
+	@echo   make app             - Build application only (default: signed)
+	@echo   make both            - Build both bootloader and application
+	@echo   make all             - Same as 'make app'
+	@echo.
+	@echo FLASH TARGETS:
+	@echo   make flash           - Flash current target (bootloader or app)
+	@echo   make flash-bl        - Build and flash bootloader
+	@echo   make flash-app       - Build and flash application
+	@echo   make flash-both      - Build and flash both
+	@echo.
+	@echo APPLICATION FOOTER OPTIONS:
+	@echo   make sec             - Build app with ECDSA signature (default, secure)
+	@echo   make crc             - Build app with CRC32 footer (legacy)
+	@echo   make none            - Build app without footer (raw binary)
+	@echo.
+	@echo UTILITY TARGETS:
+	@echo   make clean           - Remove all build artifacts
+	@echo   make size            - Display memory usage for both targets
+	@echo   make erase           - Erase entire MCU flash memory
+	@echo   make debug           - Start OpenOCD + GDB debugging session
+	@echo   make runhost         - Run host script for UART bootloader
+	@echo   make genkeys         - Generate ECDSA secp256r1 key pair
+	@echo   make sign            - Manually sign application firmware
+	@echo   make help            - Display this help message
+	@echo.
+	@echo ADVANCED OPTIONS:
+	@echo   TARGET=bootloader    - Explicitly set target (default: application)
+	@echo   FOOTER=sec^|crc^|none  - Set footer type for application build
+	@echo.
+	@echo EXAMPLES:
+	@echo   make clean ^&^& make both        - Clean build of everything
+	@echo   make app FOOTER=crc           - Build app with CRC footer
+	@echo   make flash-both               - Flash complete system
+	@echo   make size                     - Check memory usage
+	@echo.
+	@echo For more information, see README.md
+	@echo ========================================================================
+
+################################################################################
 # 📘 Phony Targets
 ################################################################################
 
-.PHONY: all clean flash debug erase bl app both flash-bl flash-app flash-both size genkeys sign sec crc none
+.PHONY: all clean flash debug erase bl app both flash-bl flash-app flash-both size genkeys sign sec crc none help
 
 # Footer type targets - set FOOTER and build application
 sec:

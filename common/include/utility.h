@@ -11,11 +11,8 @@
 #include "display_st7789.h"
 #endif
 
-
 // Temporary buffer size for number/string conversion
 #define MINI_PRINTF_BUF_SIZE 32
-#define TRUE 1
-#define FALSE 0
 
 void LED_On(void);
 void LED_Off(void);

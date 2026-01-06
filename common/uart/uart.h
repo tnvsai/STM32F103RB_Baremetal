@@ -26,11 +26,16 @@ typedef struct {
     UART_Parity_t parity;
     uint8_t enableTx;
     uint8_t enableRx;
+    uint8_t rxInterrupt;
+    uint8_t interruptPriority;
 } UART_Config_t;
 
-void UART_Init(USART_TypeDef *USARTx, UART_Config_t *config);
+void UART_Init(USART_TypeDef *USARTx, const UART_Config_t *config);
 void UART_WriteChar(USART_TypeDef *USARTx, char c);
 void UART_WriteString(USART_TypeDef *USARTx, const char *str);
 char UART_ReadChar(USART_TypeDef *USARTx);
+void UART_ReadBuffer(USART_TypeDef *USARTx, uint8_t *buffer, uint32_t length);
+void UART_WriteBuffer(USART_TypeDef *USARTx, uint8_t *buffer, uint32_t length);
+void UART_WriteHex8(USART_TypeDef *USARTx, uint8_t val);
 
 #endif

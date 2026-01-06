@@ -1,4 +1,8 @@
 #include "utility.h"
+#include"common.h"
+#include "uart.h"
+#include <stdarg.h>
+#include <stdint.h>
 
 #define LED_PIN 5
 
@@ -44,10 +48,6 @@ void LED_Off(void)
 //     delay_ms(2); // allow UART flush
 // }
 
-#include "uart.h"
-#include <stdarg.h>
-#include <stdint.h>
-
 static void u32_to_str(uint32_t value, char *buf) {
     // Handle zero explicitly
     if (value == 0) {
@@ -85,7 +85,7 @@ void mini_printf(const char *fmt, ...) {
     static uint8_t uart_initialized = 0;
     if (!uart_initialized) {
         UART_Config_t uart2_cfg = {
-            .baudRate   = 115200,
+            .baudRate   = 230400,
             .wordLength = UART_WORDLENGTH_8B,
             .stopBits   = UART_STOPBITS_1,
             .parity     = UART_PARITY_NONE,
