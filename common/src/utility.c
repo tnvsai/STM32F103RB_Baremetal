@@ -1,4 +1,8 @@
 #include "utility.h"
+#include"common.h"
+#include "uart.h"
+#include <stdarg.h>
+#include <stdint.h>
 
 #define LED_PIN 5
 
@@ -43,10 +47,6 @@ void LED_Off(void)
 //     UART_WriteString(USART2, "\r\n");
 //     delay_ms(2); // allow UART flush
 // }
-
-#include "uart.h"
-#include <stdarg.h>
-#include <stdint.h>
 
 static void u32_to_str(uint32_t value, char *buf) {
     // Handle zero explicitly

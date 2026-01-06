@@ -1,7 +1,10 @@
 /* Bootloader Linker Script for STM32F103RB */
 ENTRY(Reset_Handler)
 
-_estack = ORIGIN(RAM) + LENGTH(RAM);
+/* Reserve 4 bytes at end of RAM for shared configuration with application */
+/* Access via: volatile uint32_t *shared = (volatile uint32_t *)0x20004FFC; */
+_shared_config_size = 4;
+_estack = ORIGIN(RAM) + LENGTH(RAM) - _shared_config_size;  /* Stack ends at 0x20004FFC */
 
 _Min_Heap_Size = 0x200; /* 512 bytes heap */
 _Min_Stack_Size = 0x400; /* 1 KB stack */

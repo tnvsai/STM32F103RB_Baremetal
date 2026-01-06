@@ -58,7 +58,7 @@ static void UART_ConfigGPIO(USART_TypeDef *USARTx) {
     }
 }
 
-void UART_Init(USART_TypeDef *USARTx, UART_Config_t *config) {
+void UART_Init(USART_TypeDef *USARTx, const UART_Config_t *config) {
     // 1. Enable USART clock
     if (USARTx == USART1) RCC->APB2ENR |= (1 << 14);
     if (USARTx == USART2) RCC->APB1ENR |= (1 << 17);
@@ -112,6 +112,25 @@ void UART_WriteString(USART_TypeDef *USARTx, const char *str) {
 }
 
 char UART_ReadChar(USART_TypeDef *USARTx) {
+    // RXNE = Bit 5
     while (!(USARTx->SR & (1 << 5)));
     return (char)(USARTx->DR & 0xFF);
+}
+
+void UART_ReadBuffer(USART_TypeDef *USARTx, uint8_t *buffer, uint32_t length) {
+    for (uint32_t i = 0; i < length; i++) {
+        buffer[i] = (uint8_t)UART_ReadChar(USARTx);
+    }
+}
+
+void UART_WriteBuffer(USART_TypeDef *USARTx, uint8_t *buffer, uint32_t length) {
+    for (uint32_t i = 0; i < length; i++) {
+        UART_WriteChar(USARTx, (char)buffer[i]);
+    }
+}
+
+void UART_WriteHex8(USART_TypeDef *USARTx, uint8_t val) {
+    char hex[] = "0123456789ABCDEF";
+    UART_WriteChar(USARTx, hex[(val >> 4) & 0xF]);
+    UART_WriteChar(USARTx, hex[val & 0xF]);
 }

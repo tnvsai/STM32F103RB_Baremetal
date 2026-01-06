@@ -35,8 +35,12 @@
 /* Entry Point */
 ENTRY(Reset_Handler)
 
+/* Reserve 4 bytes at end of RAM for shared configuration with bootloader */
+/* Access via: volatile uint32_t *shared = (volatile uint32_t *)0x20004FFC; */
+_shared_config_size = 4;
+
 /* Highest address of the user mode stack */
-_estack = ORIGIN(RAM) + LENGTH(RAM); /* end of "RAM" Ram type memory */
+_estack = ORIGIN(RAM) + LENGTH(RAM) - _shared_config_size; /* Stack ends at 0x20004FFC */
 
 _Min_Heap_Size = 0x200; /* required amount of heap */
 _Min_Stack_Size = 0x400; /* required amount of stack */
