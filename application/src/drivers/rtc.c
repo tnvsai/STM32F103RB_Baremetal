@@ -42,7 +42,7 @@ void RTC_Init(void)
 // -------------------------
 // RTC Counter Access
 // -------------------------
-uint32_t RTC_GetCounter(void)
+static uint32_t RTC_GetCounter(void)
 {
     return ((uint32_t)RTC->CNTH << 16) | RTC->CNTL;
 }

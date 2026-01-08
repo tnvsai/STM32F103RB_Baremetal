@@ -124,7 +124,7 @@ void I2C_Stop(I2C_TypeDef *I2Cx) {
 // -----------------------------
 // Multi-byte write
 // -----------------------------
-int I2C_WriteMulti(I2C_TypeDef *I2Cx, uint8_t addr, uint8_t *data, uint16_t length) {
+int I2C_WriteMulti(I2C_TypeDef *I2Cx, uint8_t addr, const uint8_t *data, uint16_t length) {
     if (I2C_Start(I2Cx, addr, I2C_WRITE) != I2C_OK) return I2C_ERR;
 
     for (uint16_t i = 0; i < length; i++) {

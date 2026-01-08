@@ -42,6 +42,7 @@ OBJCOPY = arm-none-eabi-objcopy
 SIZE    = arm-none-eabi-size
 GDB     = arm-none-eabi-gdb
 OPENOCD = "C:/Program Files/xpack-openocd-0.12.0-6/bin/openocd.exe"
+CPPCHECK = "C:/Program Files/Cppcheck/cppcheck.exe"
 
 ################################################################################
 # ⚙️ Compiler and Linker Flags
@@ -274,6 +275,7 @@ help:
 	@echo   make runhost         - Run host script for UART bootloader
 	@echo   make genkeys         - Generate ECDSA secp256r1 key pair
 	@echo   make sign            - Manually sign application firmware
+	@echo   make analyze         - Run static analysis on entire project
 	@echo   make help            - Display this help message
 	@echo.
 	@echo ADVANCED OPTIONS:
@@ -293,7 +295,7 @@ help:
 # 📘 Phony Targets
 ################################################################################
 
-.PHONY: all clean flash debug erase bl app both flash-bl flash-app flash-both size genkeys sign sec crc none help
+.PHONY: all clean flash debug erase bl app both flash-bl flash-app flash-both size genkeys sign sec crc none help analyze analyze-bootloader analyze-app analyze-report
 
 # Footer type targets - set FOOTER and build application
 sec:
@@ -318,3 +320,57 @@ genkeys:
 sign:
 	@echo [SIGN] Signing application firmware...
 	@python scripts/sign_firmware.py build/application/app.bin
+
+################################################################################
+# 🔍 Static Analysis
+################################################################################
+
+.PHONY: analyze analyze-bootloader analyze-app
+
+# Analyze entire project
+analyze:
+	@echo [ANALYZE] Running static analysis on entire project...
+	@$(CPPCHECK) --enable=all \
+	          --suppress=missingIncludeSystem \
+	          --suppress=unusedFunction \
+	          --suppressions-list=suppressions.txt \
+	          --std=c11 \
+	          --platform=unix32 \
+	          --inline-suppr \
+	          --quiet \
+	          --force \
+	          -I$(COMMON_INC_DIR) \
+	          -I$(COMMON_UART_DIR) \
+	          -Icommon/crypto/micro-ecc/include \
+	          -Ibootloader/include \
+	          -Iapplication/include \
+	          bootloader/src common/src common/uart application/src
+	@echo [ANALYZE] Analysis complete!
+
+# Analyze bootloader only
+analyze-bootloader:
+	@echo [ANALYZE] Analyzing bootloader...
+	@$(CPPCHECK) --enable=all \
+	          --suppress=missingIncludeSystem \
+	          --suppressions-list=suppressions.txt \
+	          --std=c11 \
+	          -I$(COMMON_INC_DIR) \
+	          -I$(COMMON_UART_DIR) \
+	          -Icommon/crypto/micro-ecc/include \
+	          -Ibootloader/include \
+	          bootloader/src
+	@echo [ANALYZE] Bootloader analysis complete!
+
+# Analyze application only
+analyze-app:
+	@echo [ANALYZE] Analyzing application...
+	@$(CPPCHECK) --enable=all \
+	          --suppress=missingIncludeSystem \
+	          --suppressions-list=suppressions.txt \
+	          --std=c11 \
+	          -I$(COMMON_INC_DIR) \
+	          -I$(COMMON_UART_DIR) \
+	          -Iapplication/include \
+	          application/src
+	@echo [ANALYZE] Application analysis complete!
+

@@ -20,7 +20,7 @@ void CRC_Init(void);
  * 
  * @note Uses STM32 hardware CRC (polynomial 0x04C11DB7)
  */
-uint32_t CRC_Calculate(uint32_t *data, uint32_t length_words);
+uint32_t CRC_Calculate(const uint32_t *data, uint32_t length_words);
 
 /**
  * @brief Calculate CRC32 for byte array

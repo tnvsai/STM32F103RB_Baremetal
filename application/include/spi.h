@@ -20,10 +20,7 @@ void SPI2_Init(void);
 uint8_t SPI1_Transmit(uint8_t data);
 uint8_t SPI2_Transmit(uint8_t data);
 
-uint8_t SPI1_TransmitReceive(uint8_t data);
-uint8_t SPI2_TransmitReceive(uint8_t data);
-
-uint8_t SPI1_TransmitBuffer(uint8_t *txBuf, uint8_t *rxBuf, uint16_t len);
-uint8_t SPI2_TransmitBuffer(uint8_t *txBuf, uint8_t *rxBuf, uint16_t len);
+uint8_t SPI1_TransmitBuffer(const uint8_t *txBuf, uint8_t *rxBuf, uint16_t len);
+uint8_t SPI2_TransmitBuffer(const uint8_t *txBuf, uint8_t *rxBuf, uint16_t len);
 
 #endif

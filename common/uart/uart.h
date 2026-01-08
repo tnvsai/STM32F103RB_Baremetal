@@ -33,9 +33,9 @@ typedef struct {
 void UART_Init(USART_TypeDef *USARTx, const UART_Config_t *config);
 void UART_WriteChar(USART_TypeDef *USARTx, char c);
 void UART_WriteString(USART_TypeDef *USARTx, const char *str);
-char UART_ReadChar(USART_TypeDef *USARTx);
-void UART_ReadBuffer(USART_TypeDef *USARTx, uint8_t *buffer, uint32_t length);
-void UART_WriteBuffer(USART_TypeDef *USARTx, uint8_t *buffer, uint32_t length);
+char UART_ReadChar(const USART_TypeDef *USARTx);
+void UART_ReadBuffer(const USART_TypeDef *USARTx, uint8_t *buffer, uint32_t length);
+void UART_WriteBuffer(USART_TypeDef *USARTx, const uint8_t *buffer, uint32_t length);
 void UART_WriteHex8(USART_TypeDef *USARTx, uint8_t val);
 
 #endif

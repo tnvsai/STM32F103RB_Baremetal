@@ -128,7 +128,7 @@ void mini_printf(const char *fmt, ...) {
                     break;
                 }
                 case 's': {
-                    char *str = va_arg(args, char *);
+                   const char *str = va_arg(args, char *);
                     UART_WriteString(USART2, str);
                     break;
                 }

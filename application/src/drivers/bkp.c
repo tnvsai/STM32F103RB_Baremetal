@@ -22,7 +22,7 @@ uint16_t BKP_ReadReg(BKP_Reg_t reg)
 {
     if (reg < BKP_DR1 || reg > BKP_DR10) return 0xFFFF;
 
-    volatile uint32_t *bkp_base = (uint32_t *)(&BKP->DR1);
+   const volatile uint32_t *bkp_base = (uint32_t *)(&BKP->DR1);
     return (uint16_t)bkp_base[reg - 1];
 }
 

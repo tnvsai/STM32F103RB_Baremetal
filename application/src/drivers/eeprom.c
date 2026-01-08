@@ -67,7 +67,7 @@ int EEPROM_ReadByte(I2C_TypeDef *I2Cx, uint16_t mem_addr, uint8_t *data) {
 // -----------------------------
 // Write multiple bytes (page-aware)
 // -----------------------------
-int EEPROM_WriteBytes(I2C_TypeDef *I2Cx, uint16_t mem_addr, uint8_t *data, uint16_t length) {
+int EEPROM_WriteBytes(I2C_TypeDef *I2Cx, uint16_t mem_addr, const uint8_t *data, uint16_t length) {
     int ret = I2C_OK;
     uint16_t remaining = length;
     uint16_t offset = 0;
@@ -103,7 +103,7 @@ int EEPROM_WriteBytes(I2C_TypeDef *I2Cx, uint16_t mem_addr, uint8_t *data, uint1
         remaining -= to_write;
     }
 
-    return I2C_OK;
+    return ret;
 }
 
 // -----------------------------

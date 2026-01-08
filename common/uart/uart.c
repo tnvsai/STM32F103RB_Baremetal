@@ -2,7 +2,7 @@
 #include "uart.h"
 
 // Helper: get APB clock for USARTx
-static uint32_t UART_GetClock(USART_TypeDef *USARTx) {
+static uint32_t UART_GetClock(const USART_TypeDef *USARTx) {
     uint32_t pclk1 = 8000000UL; // default HSI
     uint32_t pclk2 = 8000000UL;
 
@@ -27,7 +27,7 @@ static void UART_SetBaudRate(USART_TypeDef *USARTx, uint32_t baudRate) {
 }
 
 // Helper: configure GPIO for given USART
-static void UART_ConfigGPIO(USART_TypeDef *USARTx) {
+const static void UART_ConfigGPIO(const USART_TypeDef *USARTx) {
     if (USARTx == USART1) {
         // Enable GPIOA clock
         RCC->APB2ENR |= (1 << 2);
@@ -111,26 +111,26 @@ void UART_WriteString(USART_TypeDef *USARTx, const char *str) {
     while (*str) UART_WriteChar(USARTx, *str++);
 }
 
-char UART_ReadChar(USART_TypeDef *USARTx) {
+char UART_ReadChar(const USART_TypeDef *USARTx) {
     // RXNE = Bit 5
     while (!(USARTx->SR & (1 << 5)));
     return (char)(USARTx->DR & 0xFF);
 }
 
-void UART_ReadBuffer(USART_TypeDef *USARTx, uint8_t *buffer, uint32_t length) {
+void UART_ReadBuffer(const USART_TypeDef *USARTx, uint8_t *buffer, uint32_t length) {
     for (uint32_t i = 0; i < length; i++) {
         buffer[i] = (uint8_t)UART_ReadChar(USARTx);
     }
 }
 
-void UART_WriteBuffer(USART_TypeDef *USARTx, uint8_t *buffer, uint32_t length) {
+void UART_WriteBuffer(USART_TypeDef *USARTx, const uint8_t *buffer, uint32_t length) {
     for (uint32_t i = 0; i < length; i++) {
         UART_WriteChar(USARTx, (char)buffer[i]);
     }
 }
 
 void UART_WriteHex8(USART_TypeDef *USARTx, uint8_t val) {
-    char hex[] = "0123456789ABCDEF";
+    const char hex[] = "0123456789ABCDEF";
     UART_WriteChar(USARTx, hex[(val >> 4) & 0xF]);
     UART_WriteChar(USARTx, hex[val & 0xF]);
 }

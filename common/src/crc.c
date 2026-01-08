@@ -36,7 +36,7 @@ void CRC_Init(void) {
  * @param length_words Number of words to process
  * @return Calculated CRC-32 checksum
  */
-uint32_t CRC_Calculate(uint32_t *data, uint32_t length_words) {
+uint32_t CRC_Calculate(const uint32_t *data, uint32_t length_words) {
     // Step 1: Reset CRC to initial value
     CRC->CR = CRC_CR_RESET;
     
@@ -72,7 +72,7 @@ uint32_t CRC_CalculateBytes(uint8_t *data, uint32_t length_bytes) {
     
     // Step 2: Process complete 32-bit words
     uint32_t num_words = length_bytes / 4;
-    uint32_t *word_ptr = (uint32_t *)data;
+    const uint32_t *word_ptr = (uint32_t *)data;
     
     for (uint32_t i = 0; i < num_words; i++) {
         CRC->DR = word_ptr[i];
@@ -82,7 +82,7 @@ uint32_t CRC_CalculateBytes(uint8_t *data, uint32_t length_bytes) {
     uint32_t remaining = length_bytes % 4;
     if (remaining > 0) {
         uint32_t last_word = 0;  // Zero-padded word
-        uint8_t *byte_ptr = data + (num_words * 4);
+       const uint8_t *byte_ptr = data + (num_words * 4);
         
         // Pack remaining bytes into 32-bit word (little-endian)
         // Example: [0xAA, 0xBB] becomes 0x0000BBAA

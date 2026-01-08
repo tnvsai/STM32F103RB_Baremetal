@@ -1,6 +1,8 @@
 #include "flash.h"
 
-/* --- Flash control --- */
+static Flash_Status_t Flash_WaitForLastOperation(void);
+static Flash_Status_t Flash_ErasePage(uint32_t pageAddress);
+
 
 void Flash_Unlock(void) {
     if (!(FLASH->CR & FLASH_CR_LOCK)) return; // already unlocked
@@ -12,7 +14,7 @@ void Flash_Lock(void) {
     FLASH->CR |= FLASH_CR_LOCK;
 }
 
-Flash_Status_t Flash_WaitForLastOperation(void) {
+static Flash_Status_t Flash_WaitForLastOperation(void) {
     while (FLASH->SR & FLASH_SR_BSY); // wait busy
 
     Flash_Status_t status = FLASH_OK;
@@ -33,7 +35,7 @@ Flash_Status_t Flash_WaitForLastOperation(void) {
 /* --- Flash operations --- */
 
 // Erase single page
-Flash_Status_t Flash_ErasePage(uint32_t pageAddress) {
+static Flash_Status_t Flash_ErasePage(uint32_t pageAddress) {
     Flash_Unlock();
 
     FLASH->CR &= ~FLASH_CR_PER;       // clear previous PER
@@ -49,15 +51,16 @@ Flash_Status_t Flash_ErasePage(uint32_t pageAddress) {
 }
 
 // Erase all application region
-Flash_Status_t Flash_EraseAppRegion(void) {
-    Flash_Status_t status;
+Flash_Status_t Flash_EraseAppRegion(void)
+ {
+    Flash_Status_t status = FLASH_OK;
 
     for (uint32_t addr = FLASH_START_ADDRESS; addr <= FLASH_END_ADDRESS; addr += FLASH_PAGE_SIZE) {
         status = Flash_ErasePage(addr);
         if (status != FLASH_OK) return status;
     }
 
-    return FLASH_OK;
+    return status;
 }
 
 // Program a 16-bit half-word
@@ -77,7 +80,7 @@ Flash_Status_t Flash_ProgramHalfWord(uint32_t address, uint16_t data) {
 }
 
 // Verify flash content
-int Flash_Verify(uint32_t startAddr, uint16_t *data, uint32_t length) {
+int Flash_Verify(uint32_t startAddr, const uint16_t *data, uint32_t length) {
     for (uint32_t i = 0; i < length; i++) {
         if (*((volatile uint16_t *)(startAddr + i*2)) != data[i])
             return 0;

@@ -1,0 +1,110 @@
+# ============================================================================
+# cppcheck Suppressions for STM32F103RB Baremetal Project
+# ============================================================================
+# This file defines rules for suppressing cppcheck warnings.
+# Format: <error_id>:<file_pattern>:<line>
+#   - error_id: The warning ID to suppress (e.g., unusedFunction)
+#   - file_pattern: File path pattern (* for wildcard)
+#   - line: Optional line number
+#
+# Examples:
+#   unusedFunction                         -> Suppress everywhere
+#   unusedFunction:src/main.c              -> Suppress in specific file
+#   unusedFunction:src/main.c:42           -> Suppress at specific line
+#   *:common/include/*.h                   -> Suppress all in directory
+# ============================================================================
+
+# ============================================================================
+# VENDOR CODE - STMicroelectronics CMSIS Headers
+# ============================================================================
+# These are standard ARM CMSIS headers provided by ST.
+# We don't modify them, so suppress all warnings.
+
+*:common/include/cmsis_compiler.h
+*:common/include/cmsis_gcc.h
+*:common/include/cmsis_version.h
+*:common/include/core_cm3.h
+*:common/include/stm32f1xx.h
+*:common/include/stm32f103xb.h
+*:common/include/system_stm32f1xx.h
+
+# ============================================================================
+# THIRD-PARTY LIBRARIES
+# ============================================================================
+# External cryptographic library - don't analyze
+
+*:common/crypto/micro-ecc/*
+
+# ============================================================================
+# SYSTEM FILES
+# ============================================================================
+# STM32 system initialization and syscalls - vendor provided
+
+redundantAssignment:common/src/system_stm32f1xx.c
+unreadVariable:common/src/system_stm32f1xx.c
+*:common/src/syscalls.c
+
+# ============================================================================
+# INTERRUPT HANDLERS
+# ============================================================================
+# IRQ handlers are called by hardware, not "unused" or needing "static"
+
+unusedFunction:*IRQHandler
+staticFunction:*IRQHandler
+unusedFunction:USART2_IRQHandler
+
+# ============================================================================
+# INFORMATIONAL MESSAGES (NOT ACTIONABLE)
+# ============================================================================
+
+# Missing include files (already handled by -I flags)
+missingInclude
+
+# Branch analysis limit notices
+normalCheckLevelMaxBranches
+
+# Checker report information
+checkersReport
+
+# ============================================================================
+# STYLE SUGGESTIONS (OPTIONAL - UNCOMMENT TO ENABLE)
+# ============================================================================
+# These improve code quality but aren't critical.
+# Uncomment the ones you want to suppress globally.
+
+# Const pointer suggestions
+#constParameterPointer
+#constVariablePointer
+
+# Variable scope reduction
+#variableScope
+
+# Static function suggestions (uncomment if you want to suppress)
+# staticFunction
+
+# ============================================================================
+# EMBEDDED-SPECIFIC SUPPRESSIONS
+# ============================================================================
+
+# Intentional hardware register manipulation
+# Uncomment if you get false positives from register writes
+# knownConditionTrueFalse
+# redundantAssignment
+
+# ============================================================================
+# PROJECT-SPECIFIC SUPPRESSIONS
+# ============================================================================
+# Add your custom suppressions below for specific files/functions
+
+# Example: Suppress in display driver (third-party code style)
+# staticFunction:application/src/drivers/display_st7789.c
+
+# Example: Suppress specific function
+# unusedFunction:application/src/main.c:LED1_Callback
+
+variableScope:common/src/sha256.c
+*:application\src\drivers\display_st7789.c
+
+# ============================================================================
+# END OF SUPPRESSIONS
+# ============================================================================

@@ -22,11 +22,11 @@ typedef struct
   uint32_t magic;                            // 0xBEEFC0DE
 } __attribute__((packed)) SignatureFooter_t; // Total: 76 bytes
 
-void BL_GPIO_Init(void);
-void BL_JumpToUserApp(void);
-void BL_ProcessCommand(uint8_t cmd);
-CRC_Footer_t *BL_FindCrcFooter(void);
-SignatureFooter_t *BL_FindSignatureFooter(void);
+static void BL_GPIO_Init(void);
+static void BL_JumpToUserApp(void);
+static void BL_ProcessCommand(uint8_t cmd);
+static CRC_Footer_t *BL_FindCrcFooter(void);
+static SignatureFooter_t *BL_FindSignatureFooter(void);
 
 int main(void)
 {
@@ -69,7 +69,7 @@ int main(void)
   }
 }
 
-void BL_GPIO_Init(void)
+static void BL_GPIO_Init(void)
 {
   // PC13: User button (input with pull-up)
   RCC->APB2ENR |= RCC_APB2ENR_IOPCEN;
@@ -102,7 +102,7 @@ void BL_GPIO_Init(void)
  *
  * @return Pointer to footer if found, NULL if not found
  */
-CRC_Footer_t *BL_FindCrcFooter(void)
+static CRC_Footer_t *BL_FindCrcFooter(void)
 {
   // Start from end of app region and scan backward
   for (uint32_t addr = ADD_APP_END - CRC_FOOTER_SIZE; addr >= ADD_APP_START; addr -= 4)
@@ -132,7 +132,7 @@ CRC_Footer_t *BL_FindCrcFooter(void)
  *
  * @return Pointer to signature footer if found, NULL if not found
  */
-SignatureFooter_t *BL_FindSignatureFooter(void)
+static SignatureFooter_t *BL_FindSignatureFooter(void)
 {
   // Start from end of app region and scan backward
   for (uint32_t addr = ADD_APP_END - SIGNATURE_FOOTER_SIZE; addr >= ADD_APP_START; addr -= 4)
@@ -166,7 +166,7 @@ SignatureFooter_t *BL_FindSignatureFooter(void)
  * Note: Signature verification provides cryptographic authentication.
  * Only firmware signed with the corresponding private key will boot.
  */
-void BL_JumpToUserApp(void)
+static void BL_JumpToUserApp(void)
 {
   uint32_t app_addr = ADD_APP_START;
 
@@ -181,7 +181,7 @@ void BL_JumpToUserApp(void)
   }
 
   // Step 3: Search for secure boot signature footer
-  SignatureFooter_t *sig_footer = BL_FindSignatureFooter();
+  const SignatureFooter_t *sig_footer = BL_FindSignatureFooter();
 
   if (sig_footer != NULL)
   {
@@ -222,7 +222,7 @@ void BL_JumpToUserApp(void)
     // FALLBACK: CRC Verification
     UART_Log(USART2, "No signature. Trying CRC...\r\n");
 
-    CRC_Footer_t *crc_footer = BL_FindCrcFooter();
+    const CRC_Footer_t *crc_footer = BL_FindCrcFooter();
 
     if (crc_footer != NULL)
     {
@@ -257,7 +257,7 @@ void BL_JumpToUserApp(void)
   }
 }
 
-void BL_ProcessCommand(uint8_t cmd)
+static void BL_ProcessCommand(uint8_t cmd)
 {
   uint8_t len;
   uint8_t buffer[128];

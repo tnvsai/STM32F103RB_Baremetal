@@ -8,6 +8,10 @@
 #include "sha256.h"
 #include <string.h>
 
+static void SHA256_Init(SHA256_CTX *ctx);
+static void SHA256_Update(SHA256_CTX *ctx, const uint8_t data[], uint32_t len);
+static void SHA256_Final(SHA256_CTX *ctx, uint8_t hash[]);
+
 // SHA-256 constants (first 32 bits of fractional parts of cube roots of first 64 primes)
 static const uint32_t K[64] = {
     0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5,
@@ -80,7 +84,7 @@ static void sha256_transform(SHA256_CTX *ctx, const uint8_t data[]) {
     ctx->state[7] += h;
 }
 
-void SHA256_Init(SHA256_CTX *ctx) {
+static void SHA256_Init(SHA256_CTX *ctx) {
     ctx->datalen = 0;
     ctx->bitlen = 0;
     ctx->state[0] = 0x6a09e667;
@@ -93,7 +97,7 @@ void SHA256_Init(SHA256_CTX *ctx) {
     ctx->state[7] = 0x5be0cd19;
 }
 
-void SHA256_Update(SHA256_CTX *ctx, const uint8_t data[], uint32_t len) {
+static void SHA256_Update(SHA256_CTX *ctx, const uint8_t data[], uint32_t len) {
     uint32_t i;
 
     for (i = 0; i < len; ++i) {
@@ -107,7 +111,7 @@ void SHA256_Update(SHA256_CTX *ctx, const uint8_t data[], uint32_t len) {
     }
 }
 
-void SHA256_Final(SHA256_CTX *ctx, uint8_t hash[]) {
+static void SHA256_Final(SHA256_CTX *ctx, uint8_t hash[]) {
     uint32_t i = ctx->datalen;
 
     if (ctx->datalen < 56) {

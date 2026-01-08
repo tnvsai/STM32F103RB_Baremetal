@@ -22,12 +22,10 @@ typedef enum {
 /* --- Flash control --- */
 void Flash_Unlock(void);
 void Flash_Lock(void);
-Flash_Status_t Flash_WaitForLastOperation(void);
 
 /* --- Flash operations --- */
-Flash_Status_t Flash_ErasePage(uint32_t pageAddress);
 Flash_Status_t Flash_EraseAppRegion(void);
 Flash_Status_t Flash_ProgramHalfWord(uint32_t address, uint16_t data);
-int Flash_Verify(uint32_t startAddr, uint16_t *data, uint32_t length);
+int Flash_Verify(uint32_t startAddr, const uint16_t *data, uint32_t length);
 
 #endif

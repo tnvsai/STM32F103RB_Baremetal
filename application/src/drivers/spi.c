@@ -1,5 +1,9 @@
 #include "spi.h"
 
+
+static uint8_t SPI1_TransmitReceive(uint8_t data);
+static uint8_t SPI2_TransmitReceive(uint8_t data);
+
 // ------------------- GPIO Init -------------------
 void SPI1_GPIO_Init(void) {
     RCC->APB2ENR |= RCC_APB2ENR_IOPAEN;  // Enable GPIOA clock
@@ -61,7 +65,7 @@ void SPI2_Init(void) {
 }
 
 // ------------------- Single Byte Transmit/Receive -------------------
-uint8_t SPI1_TransmitReceive(uint8_t data) {
+static uint8_t SPI1_TransmitReceive(const uint8_t data) {
     uint32_t timeout = SPI1_TIMEOUT;
     while(!(SPI1->SR & SPI_SR_TXE) && timeout--) {}
     if(timeout == 0) return 0xFF; // timeout
@@ -75,7 +79,7 @@ uint8_t SPI1_TransmitReceive(uint8_t data) {
     return SPI1->DR;
 }
 
-uint8_t SPI2_TransmitReceive(uint8_t data) {
+static uint8_t SPI2_TransmitReceive(const uint8_t data) {
     uint32_t timeout = SPI2_TIMEOUT;
     while(!(SPI2->SR & SPI_SR_TXE) && timeout--) {}
     if(timeout == 0) return 0xFF;
@@ -93,7 +97,7 @@ uint8_t SPI1_Transmit(uint8_t data) { return SPI1_TransmitReceive(data); }
 uint8_t SPI2_Transmit(uint8_t data) { return SPI2_TransmitReceive(data); }
 
 // ------------------- Multi-byte Transmit/Receive -------------------
-uint8_t SPI1_TransmitBuffer(uint8_t *txBuf, uint8_t *rxBuf, uint16_t len) {
+uint8_t SPI1_TransmitBuffer(const uint8_t *txBuf, uint8_t *rxBuf, uint16_t len) {
     for(uint16_t i=0; i<len; i++) {
         uint8_t rx = SPI1_TransmitReceive(txBuf[i]);
         if(rx == 0xFF) return SPI_TIMEOUT;
@@ -102,7 +106,7 @@ uint8_t SPI1_TransmitBuffer(uint8_t *txBuf, uint8_t *rxBuf, uint16_t len) {
     return SPI_OK;
 }
 
-uint8_t SPI2_TransmitBuffer(uint8_t *txBuf, uint8_t *rxBuf, uint16_t len) {
+uint8_t SPI2_TransmitBuffer(const uint8_t *txBuf, uint8_t *rxBuf, uint16_t len) {
     for(uint16_t i=0; i<len; i++) {
         uint8_t rx = SPI2_TransmitReceive(txBuf[i]);
         if(rx == 0xFF) return SPI_TIMEOUT;

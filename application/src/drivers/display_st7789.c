@@ -23,7 +23,7 @@ static void ST7789_WriteData(uint8_t data) {
 }
 
 // Send multiple data bytes from a buffer
-static void ST7789_WriteDataBuffer(uint8_t *buff, uint16_t len) {
+static void ST7789_WriteDataBuffer(const uint8_t *buff, uint16_t len) {
     ST7789_DC_HIGH();    // Data mode
     for(uint16_t i=0;i<len;i++)
         SPI2_Transmit(buff[i]);

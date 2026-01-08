@@ -1,7 +1,10 @@
 #include "gpio.h"
 
+static void GPIO_ConfigPin(GPIO_TypeDef *GPIOx, uint8_t pin, GPIO_ModeSpeed_t mode, GPIO_Config_t config);
+
+
 // Configure pin (generic)
-void GPIO_ConfigPin(GPIO_TypeDef *GPIOx, uint8_t pin, GPIO_ModeSpeed_t mode, GPIO_Config_t config) {
+static void GPIO_ConfigPin(GPIO_TypeDef *GPIOx, uint8_t pin, GPIO_ModeSpeed_t mode, GPIO_Config_t config) {
     uint32_t shift = (pin % 8) * 4;
     volatile uint32_t *reg = (pin < 8) ? &GPIOx->CRL : &GPIOx->CRH;
 
@@ -34,6 +37,6 @@ void GPIO_TogglePin(GPIO_TypeDef *GPIOx, uint8_t pin) {
 }
 
 // Read pin
-uint8_t GPIO_ReadPin(GPIO_TypeDef *GPIOx, uint8_t pin) {
+uint8_t GPIO_ReadPin(const GPIO_TypeDef *GPIOx, uint8_t pin) {
     return (GPIOx->IDR >> pin) & 0x1;
 }

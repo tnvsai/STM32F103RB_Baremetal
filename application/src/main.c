@@ -6,12 +6,12 @@
 #include "gpio.h"
 #include "rcc.h"
 
-void process_command(uint8_t cmd);
+static void process_command(uint8_t cmd);
 
 volatile uint8_t uart_rx_command = 0;
 volatile uint8_t uart_rx_command_received = 0;
 
-void LED1_Callback(void) 
+static void LED1_Callback(void) 
 { 
      LED_Toggle();
      UART_Log(USART2, "Led toggled\r\n");
@@ -24,7 +24,7 @@ void USART2_IRQHandler(void)
     uart_rx_command_received = 1; // set flag
 }
 
-void jumptobootloader(void)
+static void jumptobootloader(void)
 {
     TIMER_Stop(TIMER2);
     TIMER_DisableInterrupt(TIMER2);
@@ -48,7 +48,7 @@ void jumptobootloader(void)
     while(1);
 }
 
-void process_command(uint8_t cmd)
+static void process_command(uint8_t cmd)
 {
     if(CMD_JUMP_BOOT == cmd)
     {

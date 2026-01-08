@@ -31,10 +31,9 @@ typedef enum {
 } GPIO_Pull_t;
 
 // API
-void GPIO_ConfigPin(GPIO_TypeDef *GPIOx, uint8_t pin, GPIO_ModeSpeed_t mode, GPIO_Config_t config);
 void GPIO_ConfigInput(GPIO_TypeDef *GPIOx, uint8_t pin, GPIO_Pull_t pull);
 void GPIO_WritePin(GPIO_TypeDef *GPIOx, uint8_t pin, uint8_t value);
 void GPIO_TogglePin(GPIO_TypeDef *GPIOx, uint8_t pin);
-uint8_t GPIO_ReadPin(GPIO_TypeDef *GPIOx, uint8_t pin);
+uint8_t GPIO_ReadPin(const GPIO_TypeDef *GPIOx, uint8_t pin);
 
 #endif // GPIO_H
